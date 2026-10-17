@@ -12,6 +12,7 @@ const colors: Record<Archetype, { fill: string; accent: string }> = {
   phone: { fill: "#a07b9b", accent: "#edb85d" }, broom: { fill: "#bc8d47", accent: "#47715c" },
   cart: { fill: "#71989a", accent: "#d06c51" }, briefcase: { fill: "#795c4c", accent: "#d7ae56" },
   heart: { fill: "#c46c69", accent: "#6e8a78" }, note: { fill: "#d8b95c", accent: "#648092" },
+  runner: { fill: "#3f9bd1", accent: "#f2b134" },
 }
 
 function CharacterDrawing({ archetype, color, accent }: { archetype: Archetype; color: string; accent: string }) {
@@ -24,6 +25,16 @@ function CharacterDrawing({ archetype, color, accent }: { archetype: Archetype; 
       <path d="M52 88 Q70 78 88 88 M52 98 Q70 108 88 98" fill="none" {...common} />
       <path d="M47 113 L44 135 M93 113 L96 135" fill="none" {...common} /><path d="M35 137h16 M88 137h17" {...common} />
       <path d="M19 78l-6 12 M127 78l6 12" fill="none" {...common} />
+    </>
+    case "runner": return <>
+      {/* A running shoe mid-stride: headband, laces for a face, speed lines behind. */}
+      <path d="M8 62h18 M4 76h20 M10 90h16" fill="none" stroke={accent} strokeWidth="4" strokeLinecap="round" />
+      <path d="M34 88 Q36 52 62 50 L84 50 Q92 66 112 74 Q128 80 126 96 L126 104 L34 104Z" fill={color} {...common} />
+      <path d="M34 104h92 v8 Q80 120 34 112Z" fill="#f6f0e4" {...common} />
+      <path d="M60 50 Q62 40 72 38 Q84 38 86 50" fill="none" stroke={accent} strokeWidth="6" strokeLinecap="round" />
+      <path d="M70 62l16 6 M66 70l18 6 M62 78l20 6" fill="none" stroke="#f6f0e4" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="52" cy="70" r="3" fill="#263844" /><circle cx="60" cy="66" r="3" fill="#263844" /><path d="M48 80q8 6 16 0" fill="none" {...common} />
+      <path d="M56 112 L44 132 L30 136 M96 114 L112 128 L126 124" fill="none" {...common} />
     </>
     case "envelope": return <>
       <path d="M22 54 Q70 43 118 54 L113 108 Q70 119 27 108Z" fill={color} {...common} />
@@ -115,7 +126,7 @@ export function TaskCharacter({ archetype, state = "idle", variant = "defendant"
 export function JudgeCharacter({ striking = false }: { striking?: boolean }) {
   const reduceMotion = useReducedMotion()
   return <motion.div className="court-judge" role="img" aria-label="The Honourable Day, presiding judge" animate={!reduceMotion && striking ? { rotate: [0, -5, 4, 0], y: [0, 4, -2, 0] } : undefined} transition={{ duration: 0.45 }}>
-    <svg viewBox="0 0 150 155" aria-hidden="true"><path d="M20 116h110v26H20z" fill="#80583b" stroke="#302b29" strokeWidth="4"/><path d="M33 101h84v20H33z" fill="#c79d57" stroke="#302b29" strokeWidth="3"/><path d="M49 57q-1-27 26-28q27 1 26 28v29H49Z" fill="#f1cba4" stroke="#302b29" strokeWidth="3"/><path d="M45 58q-8-15-1-30l16 10q12-20 26-1l16-10q10 18-2 32" fill="#e8e1d4" stroke="#302b29" strokeWidth="3"/><circle cx="65" cy="61" r="3"/><circle cx="85" cy="61" r="3"/><path d="M66 75q9 8 18 0" fill="none" stroke="#302b29" strokeWidth="3" strokeLinecap="round"/><path d="M48 93q27-18 54 0l14 22H34Z" fill="#263b4a" stroke="#302b29" strokeWidth="3"/><path d="M104 72l29-9 M126 58l14 7-7 14-14-7z" fill="#c79d57" stroke="#302b29" strokeWidth="3"/></svg>
+    <svg viewBox="0 0 150 155" aria-hidden="true"><path d="M20 116h110v26H20z" fill="#80583b" stroke="#302b29" strokeWidth="4"/><path d="M33 101h84v20H33z" fill="#c79d57" stroke="#302b29" strokeWidth="3"/><path d="M49 57q-1-27 26-28q27 1 26 28v29H49Z" fill="#f1cba4" stroke="#302b29" strokeWidth="3"/><path d="M45 58q-8-15-1-30l16 10q12-20 26-1l16-10q10 18-2 32" fill="#e8e1d4" stroke="#302b29" strokeWidth="3"/><circle cx="65" cy="61" r="3"/><circle cx="85" cy="61" r="3"/><path d="M66 75q9 8 18 0" fill="none" stroke="#302b29" strokeWidth="3" strokeLinecap="round"/><path d="M48 93q27-18 54 0l14 22H34Z" fill="#263b4a" stroke="#302b29" strokeWidth="3"/><motion.g style={{ transformOrigin: "104px 74px" }} animate={!reduceMotion && striking ? { rotate: [0, -38, 22, 0] } : { rotate: 0 }} transition={{ duration: 0.45 }}><path d="M98 94 Q108 84 104 74" fill="none" stroke="#263b4a" strokeWidth="10" strokeLinecap="round"/><path d="M104 73l25-8" stroke="#3b2414" strokeWidth="5" strokeLinecap="round"/><path d="M123 54l16 7-7 16-16-7z" fill="#4a2c1a" stroke="#302b29" strokeWidth="3"/><path d="M127 61l9 4 M124 68l9 4" stroke="#e8c77f" strokeWidth="3" strokeLinecap="round"/><circle cx="104" cy="74" r="5.5" fill="#f1cba4" stroke="#302b29" strokeWidth="2.5"/></motion.g></svg>
     <span>THE HONOURABLE DAY</span>
   </motion.div>
 }

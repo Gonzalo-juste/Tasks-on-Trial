@@ -123,3 +123,13 @@
 .single-witness-section .witness-answer-confirmation{color:#a9d5b1}
 .justice-scale .is-defendant .character-illustration{filter:saturate(1.4) brightness(1.15) drop-shadow(0 0 6px #f6d48a66)!important}
 .justice-scale .pan-defendant .docket-character{width:46px;min-width:46px;height:50px}
+
+/* ---- Neutral courtroom while a case is heard: red is reserved for DISMISSED ---- */
+.scene-objection{box-shadow:inset 0 0 0 999px #d9b86a1a,0 12px 30px #27231b2e!important}
+.prosecution-bubble{color:#f6efe0;border-color:#c9a45c;background:linear-gradient(135deg,#34495a,#22323f)}
+.prosecution-bubble:after{border-right-color:#c9a45c;border-bottom-color:#c9a45c;background:#2b3d4b}
+.prosecution-bubble span{color:#f2cf86}
+.prosecutor-area>strong{color:#f2cf86}
+.ahem-bubble{position:absolute;top:-28px;right:-30px;z-index:8;padding:3px 8px;color:#1f2f38;border:2px solid #e2c27a;border-radius:12px;background:#fffaf0;box-shadow:0 4px 10px #0005;font:800 12px var(--font-court-sans),Arial,sans-serif;transform-origin:bottom left}
+.skip-verdict.skip-one{color:#1f3442;border-color:#c9a45c;background:#f6ecd2}
+.court-controls{display:flex;flex-wrap:wrap;gap:8px}

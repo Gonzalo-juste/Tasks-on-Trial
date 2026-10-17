@@ -21,7 +21,8 @@ function emptyCase(): Case {
 
 function archetypeForTask(task: Task): Archetype {
   const text = `${task.title} ${task.category}`.toLowerCase()
-  if (/gym|workout|exercise|run|train|health/.test(text)) return "dumbbell"
+  if (/\b(run|running|jog|jogging)\b/.test(text)) return "runner"
+  if (/gym|workout|exercise|train|health/.test(text)) return "dumbbell"
   if (/email|inbox|reply/.test(text)) return "envelope"
   if (/math|study|read|exam|book|learning/.test(text)) return "book"
   if (/presentation|slides|deck/.test(text)) return "slides"
@@ -138,7 +139,7 @@ function clock(value: number) {
 
 // Every argument gets the same reading time in every format; bigger formats add rounds, not slowness.
 export const ROUNDS_BY_MODE: Record<Case["rules"]["mode"], number> = { immediate: 1, quick: 1, standard: 2, grand: 3 }
-const BEAT_MS = { walk: 700, exchange: 2600, verdict: 1900, sit: 500 }
+const BEAT_MS = { walk: 1100, exchange: 2600, verdict: 1900, sit: 500 }
 type CourtPhase = "walking" | "speaking" | "nervous" | "hit" | "verdict" | "sitting"
 type Exchange = NonNullable<Decision["exchanges"]>[number]
 
@@ -193,10 +194,43 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
   const fixedMinutes = caseData.constitution.fixed_blocks.reduce((total, block) => total + Math.max(0, minutes(block.end) - minutes(block.start)), 0)
   const courtBudget = Math.max(0, minutes(caseData.constitution.end) - minutes(caseData.constitution.start) - fixedMinutes)
   const replayKey = replay?.key ?? 0
+  // One defendant at a time, so a single testimony can be skipped without touching the others.
+  const orderRef = useRef<number[]>([])
+  const positionRef = useRef(0)
+  const clearTimers = () => { timersRef.current.forEach(window.clearTimeout); timersRef.current = [] }
+  const later = (run: () => void, time: number) => { timersRef.current.push(window.setTimeout(run, time)) }
+  const seat = (index: number) => {
+    const id = result.decisions[index]?.task_id
+    if (id) setSeatedIds((ids) => ids.includes(id) ? ids : [...ids, id])
+  }
+  const runVerdict = (position: number) => {
+    const index = orderRef.current[position]
+    setActiveIndex(index)
+    setPhase("verdict")
+    later(() => { setPhase("sitting"); seat(index) }, BEAT_MS.verdict)
+    later(() => runDefendant(position + 1), BEAT_MS.verdict + BEAT_MS.sit)
+  }
+  const runDefendant = (position: number) => {
+    if (position >= orderRef.current.length) { setActiveIndex(result.decisions.length); setPhase("sitting"); return }
+    positionRef.current = position
+    const index = orderRef.current[position]
+    const script = scriptFor(result.decisions[index], rounds)
+    setActiveIndex(index)
+    setExchangeIndex(0)
+    setPhase("walking")
+    let time = BEAT_MS.walk
+    script.forEach((exchange, n) => {
+      later(() => { setExchangeIndex(n); setPhase(exchange.speaker === "prosecution" ? "hit" : "speaking") }, time)
+      time += BEAT_MS.exchange
+    })
+    later(() => runVerdict(position), time)
+  }
+  const skipTestimony = () => { clearTimers(); runVerdict(positionRef.current) }
   useEffect(() => {
     const everyone = result.decisions.map((decision) => decision.task_id)
     const replayIndex = replay ? result.decisions.findIndex((decision) => decision.task_id === replay.taskId) : -1
     const order = replayIndex >= 0 ? [replayIndex] : everyone.map((_, index) => index)
+    clearTimers()
     if ((instant && replayIndex < 0) || !order.length) {
       setSeatedIds(everyone)
       setPhase("sitting")
@@ -205,32 +239,16 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
     }
     setSeatedIds(replayIndex >= 0 ? everyone.filter((id) => id !== replay?.taskId) : [])
     if (replayIndex < 0) onPlayed?.()
-    const timers: number[] = []
-    timersRef.current = timers
-    const at = (time: number, run: () => void) => timers.push(window.setTimeout(run, time))
-    let time = 0
-    order.forEach((index) => {
-      const script = scriptFor(result.decisions[index], rounds)
-      at(time, () => { setActiveIndex(index); setExchangeIndex(0); setPhase("walking") })
-      time += BEAT_MS.walk
-      script.forEach((exchange, n) => {
-        at(time, () => { setExchangeIndex(n); setPhase(exchange.speaker === "prosecution" ? "hit" : "speaking") })
-        time += BEAT_MS.exchange
-      })
-      at(time, () => setPhase("verdict"))
-      time += BEAT_MS.verdict
-      at(time, () => { setPhase("sitting"); setSeatedIds((ids) => ids.includes(everyone[index]) ? ids : [...ids, everyone[index]]) })
-      time += BEAT_MS.sit
-    })
-    at(time, () => { setActiveIndex(result.decisions.length); setPhase("sitting") })
-    return () => timers.forEach(window.clearTimeout)
+    orderRef.current = order
+    runDefendant(0)
+    return clearTimers
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseData.rules.mode, instant, result.decisions.length, replayKey, rounds])
   const verdicts = ["APPROVED", "REDUCED", "DISMISSED"] as const
   const byVerdict = (verdict: Verdict) => result.decisions.filter((decision) => decision.verdict === verdict && seatedIds.includes(decision.task_id))
-  const skip = () => { timersRef.current.forEach(window.clearTimeout); timersRef.current = []; setSeatedIds(result.decisions.map((decision) => decision.task_id)); setPhase("sitting"); setActiveIndex(result.decisions.length) }
+  const skip = () => { clearTimers(); setSeatedIds(result.decisions.map((decision) => decision.task_id)); setPhase("sitting"); setActiveIndex(result.decisions.length) }
   return <section className={`new-stage courtroom-new ${phase === "hit" && !reduceMotion ? "court-shake" : ""}`}>
-    <div className="courtroom-topline"><div><span className="new-eyebrow">THE EVIDENCE IS HEARD</span><h1>The Courtroom</h1><p>Every matter gets its moment. Every minute has a witness.</p></div><div className="court-controls">{!allSeated && <button className="skip-verdict" onClick={skip}><ArrowDown /> Skip testimony</button>}{allSeated && onReplayAll && <button className="skip-verdict" onClick={onReplayAll}><ArrowLeft /> Replay the trial</button>}</div></div>
+    <div className="courtroom-topline"><div><span className="new-eyebrow">THE EVIDENCE IS HEARD</span><h1>The Courtroom</h1><p>Every matter gets its moment. Every minute has a witness.</p></div><div className="court-controls">{!allSeated && phase !== "verdict" && phase !== "sitting" && <button className="skip-verdict skip-one" onClick={skipTestimony}><ArrowRight /> Skip this testimony</button>}{!allSeated && <button className="skip-verdict" onClick={skip}><ArrowDown /> Skip all testimony</button>}{allSeated && onReplayAll && <button className="skip-verdict" onClick={onReplayAll}><ArrowLeft /> Replay the trial</button>}</div></div>
     <div className={`court-scene ${phase === "hit" ? "scene-objection" : ""} ${phase === "verdict" && activeDecision ? `scene-verdict scene-tone-${verdictTone[activeDecision.verdict]}` : ""}`}>
       <div className="scene-curtain" aria-hidden="true" />
       <div className="scene-title"><span>IN THE MATTER OF</span><strong>YOUR DAY</strong></div>
@@ -238,9 +256,9 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
       <div className="queue-area"><span className="scene-label">THE QUEUE</span>{result.decisions.map((decision, index) => {
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         if (!task) return null
-        return <motion.div key={task.id} className={`queue-defendant ${index === activeIndex && !allSeated ? "in-spotlight" : ""}`} animate={!reduceMotion && index === activeIndex && !allSeated ? { x: [0, 20, 38], y: [0, -5, 0] } : { x: 0 }} transition={{ duration: 1.1 }}><TaskCharacter archetype={decision.persona.archetype} compact state={index === activeIndex && !allSeated ? phase === "verdict" ? "speaking" : phase : "idle"} prisonerNumber={index + 1} variant="defendant" label={`${decision.effective_title}, queue`} /><span>{decision.effective_title}</span></motion.div>
+        return <motion.div key={task.id} className={`queue-defendant ${index === activeIndex && !allSeated ? "in-spotlight" : ""}`} animate={!reduceMotion && index === activeIndex && !allSeated ? { x: [0, 20, 38], y: [0, -5, 0] } : { x: 0 }} transition={{ duration: 1.1 }}><TaskCharacter archetype={artFor(decision, caseData.tasks)} compact state={index === activeIndex && !allSeated ? phase === "verdict" ? "speaking" : phase : "idle"} prisonerNumber={index + 1} variant="defendant" label={`${decision.effective_title}, queue`} /><span>{decision.effective_title}</span></motion.div>
       })}</div>
-      <div className="witness-spot"><span className="scene-label">THE WITNESS STAND</span><div className="witness-rail" />{activeTask && !allSeated && <motion.div className="stand-witness" key={activeTask.id} initial={reduceMotion ? false : { opacity: 0, x: -38, y: 10 }} animate={{ opacity: 1, x: 0, y: 0 }}><TaskCharacter archetype={activeDecision.persona.archetype} state={phase === "verdict" ? "speaking" : phase} prisonerNumber={activeIndex + 1} variant="defendant" label={`${activeTask.title}, ${phase}`} /><span>{activeTask.title}</span>{(phase === "speaking" || phase === "nervous") && currentExchange && <motion.div key={`defence-${activeIndex}-${exchangeIndex}`} className="defense-bubble" initial={{ opacity: 0, scale: 0.9, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}><span>{rounds > 1 ? `ROUND ${currentExchange.round} OF ${rounds} · ` : ""}{activeDecision.persona.name.toUpperCase()} · {currentExchange.round > 1 ? "REBUTTAL" : "THE DEFENCE"}</span><p>{currentExchange.text}</p></motion.div>}{phase === "hit" && currentExchange && <motion.div key={`prosecution-${activeIndex}-${exchangeIndex}`} className="prosecution-bubble" initial={{ opacity: 0, scale: 0.8, x: 30 }} animate={{ opacity: 1, scale: 1, x: 0 }}><span>{rounds > 1 ? `ROUND ${currentExchange.round} OF ${rounds} · ` : ""}OBJECTION! · THE PROSECUTION</span><p>{currentExchange.text}</p></motion.div>}</motion.div>}
+      <div className="witness-spot"><span className="scene-label">THE WITNESS STAND</span><div className="witness-rail" />{activeTask && !allSeated && <motion.div className="stand-witness" key={`${activeTask.id}-${replayKey}`} initial={reduceMotion ? false : { opacity: 0, x: -170, y: 60, rotate: -25, scaleX: 0.7, scaleY: 1.2 }} animate={reduceMotion ? { opacity: 1 } : { opacity: [0, 1, 1, 1, 1], x: [-170, -90, -20, 0, 0], y: [60, -70, -30, 6, 0], rotate: [-25, 160, 340, 360, 360], scaleX: [0.7, 1, 1, 1.25, 1], scaleY: [1.2, 1, 1, 0.75, 1] }} transition={{ duration: 0.85, ease: "easeOut", times: [0, 0.35, 0.65, 0.85, 1] }}>{phase === "walking" && <motion.span className="ahem-bubble" initial={{ opacity: 0, scale: 0.4, y: 6 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.55, type: "spring", stiffness: 400, damping: 12 }}>Ahem!</motion.span>}<TaskCharacter archetype={artFor(activeDecision, caseData.tasks)} state={phase === "verdict" ? "speaking" : phase} prisonerNumber={activeIndex + 1} variant="defendant" label={`${activeTask.title}, ${phase}`} /><span>{activeTask.title}</span>{(phase === "speaking" || phase === "nervous") && currentExchange && <motion.div key={`defence-${activeIndex}-${exchangeIndex}`} className="defense-bubble" initial={{ opacity: 0, scale: 0.9, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}><span>{rounds > 1 ? `ROUND ${currentExchange.round} OF ${rounds} · ` : ""}{activeDecision.persona.name.toUpperCase()} · {currentExchange.round > 1 ? "REBUTTAL" : "THE DEFENCE"}</span><p>{currentExchange.text}</p></motion.div>}{phase === "hit" && currentExchange && <motion.div key={`prosecution-${activeIndex}-${exchangeIndex}`} className="prosecution-bubble" initial={{ opacity: 0, scale: 0.8, x: 30 }} animate={{ opacity: 1, scale: 1, x: 0 }}><span>{rounds > 1 ? `ROUND ${currentExchange.round} OF ${rounds} · ` : ""}OBJECTION! · THE PROSECUTION</span><p>{currentExchange.text}</p></motion.div>}</motion.div>}
         {allSeated && <div className="empty-witness"><span>The room is in order.</span><span>{result.judge_summary}</span></div>}
       </div>
       <div className="prosecutor-area"><ProsecutorCharacter objecting={phase === "hit"} /><span>THE PROSECUTOR</span>{phase === "hit" && <strong>OBJECTION!</strong>}</div>
@@ -251,7 +269,7 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
         if (!task) return null
         const activeMenu = menuTask === task.id
         const pardonAvailable = pardonsUsed < 2 && decision.verdict !== "APPROVED"
-        return <div className="seated-character" key={task.id}><TaskCharacter archetype={decision.persona.archetype} state={activeMenu ? "speaking" : "sitting"} prisonerNumber={result.decisions.findIndex((item) => item.task_id === task.id) + 1} variant={decision.verdict === "DISMISSED" ? "defendant" : "on-duty"} label={`Open actions for ${decision.effective_title}`} onClick={() => setMenuTask(activeMenu ? null : task.id)} /><span>{decision.effective_title}</span>{activeMenu && <div className="radial-menu"><button onClick={() => onCrossExamine(task.id)}>Cross-examine</button>{pardonAvailable && <button disabled={busy} onClick={() => { setMenuTask(null); onPardon(task.id) }}>Pardon ({2 - pardonsUsed} left)</button>}{decision.verdict !== "DISMISSED" && <button onClick={() => onCallJudge(task.id)}>Call the judge</button>}{decision.verdict === "REDUCED" && <button onClick={() => onAppeal(task.id)}>Appeal</button>}</div>}</div>
+        return <div className="seated-character" key={task.id}><TaskCharacter archetype={artFor(decision, caseData.tasks)} state={activeMenu ? "speaking" : "sitting"} prisonerNumber={result.decisions.findIndex((item) => item.task_id === task.id) + 1} variant={decision.verdict === "DISMISSED" ? "defendant" : "on-duty"} label={`Open actions for ${decision.effective_title}`} onClick={() => setMenuTask(activeMenu ? null : task.id)} /><span>{decision.effective_title}</span>{activeMenu && <div className="radial-menu"><button onClick={() => onCrossExamine(task.id)}>Cross-examine</button>{pardonAvailable && <button disabled={busy} onClick={() => { setMenuTask(null); onPardon(task.id) }}>Pardon ({2 - pardonsUsed} left)</button>}{decision.verdict !== "DISMISSED" && <button onClick={() => onCallJudge(task.id)}>Call the judge</button>}{decision.verdict === "REDUCED" && <button onClick={() => onAppeal(task.id)}>Appeal</button>}</div>}</div>
       })}</div></section>)}</div>
       <div className="time-recovered"><span className="hourglass-icon">⌛</span><div><small>TIME RECOVERED</small><strong>{result.metrics.minutes_recovered}<em> min</em></strong></div><div className="jar-fill"><i style={{ height: `${Math.min(100, result.metrics.minutes_recovered / 1.8)}%` }} /></div></div>
       {relationTasks.length > 0 && <div className="relations-legend" aria-label="Task relationships">{relationTasks.map((relation) => <span key={`${relation.a?.id}-${relation.b?.id}`} className={`relation-${relation.type}`}>{relation.type === "ally" ? "🤝" : relation.type === "rival" ? "⚡" : "⛓"} {relation.a?.title} ↔ {relation.b?.title}</span>)}</div>}
@@ -292,7 +310,7 @@ function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrd
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         const slot = result.schedule.find((item) => item.task_id === decision.task_id)
         if (!task) return null
-        return <div className="day-task-tile" key={task.id} role="button" tabIndex={0} aria-label={`Open court order for ${decision.effective_title}`} onClick={() => openOrder(task.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openOrder(task.id) } }}><TaskCharacter archetype={decision.persona.archetype} variant="on-duty" compact label={`${task.title}, on duty`} /><span className="tile-main"><strong>{decision.effective_title}</strong><small>{slot ? `${slot.start}–${slot.end}` : "Not scheduled today"}</small><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}{pardonIds.includes(task.id) && " · PARDONED"}</span></span>{decision.saved_min > 0 && <span className="tile-saved">SAVED {decision.saved_min} MIN</span>}<ArrowRight /></div>
+        return <div className="day-task-tile" key={task.id} role="button" tabIndex={0} aria-label={`Open court order for ${decision.effective_title}`} onClick={() => openOrder(task.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openOrder(task.id) } }}><TaskCharacter archetype={artFor(decision, caseData.tasks)} variant="on-duty" compact label={`${task.title}, on duty`} /><span className="tile-main"><strong>{decision.effective_title}</strong><small>{slot ? `${slot.start}–${slot.end}` : "Not scheduled today"}</small><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}{pardonIds.includes(task.id) && " · PARDONED"}</span></span>{decision.saved_min > 0 && <span className="tile-saved">SAVED {decision.saved_min} MIN</span>}<ArrowRight /></div>
       })}</div></section>
     </div>
     {relations.length > 0 && <div className="sentence-relations"><span className="new-eyebrow">THE RELATIONSHIPS</span>{relations.map((relation) => <span key={`${relation.a}-${relation.b}`} className={`relation-${relation.type}`}>{relation.type === "ally" ? "🤝" : relation.type === "rival" ? "⚡" : "⛓"} {caseData.tasks.find((task) => task.id === relation.a)?.title} — {relation.reason}</span>)}</div>}
@@ -312,6 +330,14 @@ const JUDGE_PRESETS: Record<Archetype, string[]> = {
   briefcase: ["Smallest useful deliverable", "Split it in two", "Delegate part of it"],
   heart: ["A short call instead", "Plan it together", "Send a message first"],
   note: ["Make it easier", "Split it in two"],
+  runner: ["Shorter, faster run", "Run-walk intervals", "Swap for a brisk walk"],
+}
+
+/** The character to draw: our title-based guess wins over the backend's, which can be off (e.g. a run drawn as a phone). */
+function artFor(decision: Decision, tasks: Task[]): Archetype {
+  const task = tasks.find((item) => item.id === decision.task_id)
+  const local = task ? archetypeForTask(task) : "note"
+  return local !== "note" ? local : decision.persona.archetype
 }
 
 function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onRevise, onClose, onCrossExamine }: {
@@ -327,7 +353,7 @@ function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onR
   const [doneMinutes, setDoneMinutes] = useState<number | null>(null)
   const [instruction, setInstruction] = useState("")
   const [lastAsked, setLastAsked] = useState<string | null>(null)
-  const presetsForTask = [...(JUDGE_PRESETS[decision.persona.archetype] ?? JUDGE_PRESETS.note), "Different first move"]
+  const presetsForTask = [...(JUDGE_PRESETS[artFor(decision, caseData.tasks)] ?? JUDGE_PRESETS.note), "Different first move"]
   const actionPlan = revision?.action_plan ?? decision.action_plan
   const firstMove = revision?.first_move ?? decision.first_move ?? "Open the task and take the first small step."
   const doneWhen = revision?.done_when ?? decision.done_when ?? "The agreed scope is complete."
@@ -347,7 +373,7 @@ function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onR
   const startTime = minutes(slot?.start ?? caseData.constitution.start) + (slot?.buffer_min ?? 0)
   let cursor = startTime
   return <div className="order-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><motion.aside className="court-order-sheet" role="dialog" aria-modal="true" aria-labelledby="order-title" initial={reduceMotion ? false : { opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }}>
-    <div className="order-sheet-header"><button className="order-close" onClick={onClose} aria-label="Close court order"><X /></button><div className="order-hero-character"><TaskCharacter archetype={decision.persona.archetype} variant="on-duty" state="idle" label={`${task.title}, on duty`} /></div><div className="order-heading-copy"><span className="new-eyebrow">COURT ORDER NO. {task.id.toUpperCase()}</span><h2 id="order-title">{decision.effective_title}</h2><p>{slot ? `${slot.start}–${slot.end}` : "Unscheduled · make room when ready"} · {decision.approved_min} min approved</p><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}</span>{decision.saved_min > 0 && <strong className="order-saved">SAVED {decision.saved_min} MIN</strong>}</div></div>
+    <div className="order-sheet-header"><button className="order-close" onClick={onClose} aria-label="Close court order"><X /></button><div className="order-hero-character"><TaskCharacter archetype={artFor(decision, caseData.tasks)} variant="on-duty" state="idle" label={`${task.title}, on duty`} /></div><div className="order-heading-copy"><span className="new-eyebrow">COURT ORDER NO. {task.id.toUpperCase()}</span><h2 id="order-title">{decision.effective_title}</h2><p>{slot ? `${slot.start}–${slot.end}` : "Unscheduled · make room when ready"} · {decision.approved_min} min approved</p><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}</span>{decision.saved_min > 0 && <strong className="order-saved">SAVED {decision.saved_min} MIN</strong>}</div></div>
     {decision.cut_scope.length > 0 && <div className="not-today"><span>NOT TODAY</span><ul>{decision.cut_scope.map((item) => <li key={item}><s>{item}</s></li>)}</ul></div>}
     <div className="order-sheet-body"><section className="first-move-card"><span>⚡ FIRST MOVE</span><p>{firstMove}</p><button onClick={() => { setFocus(true); setSeconds(60) }}><ArrowRight /> Start</button></section>
       <section className="order-steps"><div className="order-steps-head"><span className="new-eyebrow">THE PLAN</span><h3>One step at a time.</h3></div>{actionPlan.map((step, index) => {

@@ -26,7 +26,8 @@ function pause() {
 
 const archetypeFor = (line: string): Archetype => {
   const text = line.toLowerCase()
-  if (/gym|workout|exercise|run|train/.test(text)) return "dumbbell"
+  if (/\b(run|running|jog|jogging)\b/.test(text)) return "runner"
+  if (/gym|workout|exercise|train/.test(text)) return "dumbbell"
   if (/email|inbox|reply/.test(text)) return "envelope"
   if (/math|study|read|exam|book/.test(text)) return "book"
   if (/presentation|slides|deck/.test(text)) return "slides"
@@ -40,7 +41,7 @@ const archetypeFor = (line: string): Archetype => {
 
 const categoryFor = (archetype: Archetype): Category => ({
   dumbbell: "health", envelope: "work", book: "learning", slides: "work", phone: "leisure",
-  broom: "other", cart: "money", briefcase: "work", heart: "family", note: "other",
+  broom: "other", cart: "money", briefcase: "work", heart: "family", note: "other", runner: "health",
 } satisfies Record<Archetype, Category>)[archetype]
 
 function makeMockTask(line: string, index: number): Task {

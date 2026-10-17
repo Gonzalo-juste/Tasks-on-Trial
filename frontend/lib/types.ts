@@ -1,6 +1,6 @@
 export type Category = "health" | "learning" | "work" | "money" | "family" | "leisure" | "other"
 
-export type Archetype = "dumbbell" | "envelope" | "book" | "slides" | "phone" | "broom" | "cart" | "briefcase" | "heart" | "note"
+export type Archetype = "dumbbell" | "envelope" | "book" | "slides" | "phone" | "broom" | "cart" | "briefcase" | "heart" | "note" | "runner"
 
 export interface Task {
   id: string

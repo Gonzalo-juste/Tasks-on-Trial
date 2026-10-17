@@ -5,7 +5,7 @@
 // (durations, buffers, minimums) are estimates and are listed in `estimated`, never in `facts`.
 import type { Category, Task } from "./types"
 
-export type Archetype = "dumbbell" | "envelope" | "book" | "slides" | "phone" | "broom" | "cart" | "briefcase" | "heart" | "note"
+export type Archetype = "dumbbell" | "envelope" | "book" | "slides" | "phone" | "broom" | "cart" | "briefcase" | "heart" | "note" | "runner"
 
 interface ArchetypeDefaults {
   emoji: string
@@ -28,10 +28,11 @@ export const ARCHETYPES: Record<Archetype, ArchetypeDefaults> = {
   briefcase: { emoji: "💼", category: "work", duration_min: 60, minimum_min: 30, buffer_min: 0, keywords: /\b(meeting|report|client|work|project|invoice|call with|proposal|code|coding)\b/i },
   heart: { emoji: "❤️", category: "family", duration_min: 60, minimum_min: 30, buffer_min: 10, keywords: /\b(mum|mom|dad|family|friend|friends|partner|date|kids?|visit|call (my|grandma|grandpa))\b/i },
   note: { emoji: "🗒️", category: "other", duration_min: 30, minimum_min: 15, buffer_min: 0, keywords: /$^/ },
+  runner: { emoji: "🏃", category: "health", duration_min: 30, minimum_min: 15, buffer_min: 0, keywords: /\b(run|running|jog|jogging|5k|10k)\b/i },
 }
 
 // "slides" before "book" so "Finish pitch slides" is not read as study; "phone" first so "scroll" wins.
-const ORDER: Archetype[] = ["phone", "envelope", "slides", "book", "dumbbell", "cart", "broom", "heart", "briefcase"]
+const ORDER: Archetype[] = ["phone", "envelope", "slides", "book", "runner", "dumbbell", "cart", "broom", "heart", "briefcase"]
 
 export function detectArchetype(text: string): Archetype {
   return ORDER.find((name) => ARCHETYPES[name].keywords.test(text)) ?? "note"

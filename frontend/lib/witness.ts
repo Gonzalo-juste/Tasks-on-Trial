@@ -78,10 +78,11 @@ const TEMPLATES: Record<Archetype, Template> = {
   }),
   briefcase: canShorten,
   note: canShorten,
+  runner: canShorten,
 }
 
 // Which uncertainty changes a ruling most, first.
-const PRIORITY: Archetype[] = ["book", "slides", "envelope", "dumbbell", "broom", "cart", "heart", "phone", "briefcase", "note"]
+const PRIORITY: Archetype[] = ["book", "slides", "envelope", "dumbbell", "broom", "cart", "heart", "phone", "briefcase", "runner", "note"]
 
 /** Mandatory tasks, tasks with an explicit travel buffer and tasks already answered need no question. */
 function isResolved(task: Task, archetype: Archetype) {

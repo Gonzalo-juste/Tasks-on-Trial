@@ -34,7 +34,8 @@ const durationPresets = [{ label: "XS", minutes: 15 }, { label: "S", minutes: 30
 
 function archetypeForTask(task: Task): Archetype {
   const text = `${task.title} ${task.category}`.toLowerCase()
-  if (/gym|workout|exercise|run|train|health/.test(text)) return "dumbbell"
+  if (/\b(run|running|jog|jogging)\b/.test(text)) return "runner"
+  if (/gym|workout|exercise|train|health/.test(text)) return "dumbbell"
   if (/email|inbox|reply/.test(text)) return "envelope"
   if (/math|study|read|exam|book|learning/.test(text)) return "book"
   if (/presentation|slides|deck|pitch/.test(text)) return "slides"
