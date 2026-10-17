@@ -50,11 +50,12 @@ export const QUICK_ADD: { label: string; line: string }[] = [
 /** Rough sizes for editing an estimated duration. Explicit user durations are never replaced. */
 export const SIZES = { XS: 15, S: 30, M: 60, L: 120 } as const
 
-/** "Try a chaotic day": real parser input, not a hard-coded verdict. 335 minutes requested. */
+/** "Try a chaotic day": real parser input, not a hard-coded verdict. 365 minutes requested. */
 export const CHAOTIC_DAY = [
   "Finish pitch slides 90 min due 6pm",
   "Study for exam 90 min",
   "Gym 60 min + 20 min travel",
+  "Go for a run 30 min",
   "Reply to emails 30 min",
   "Scroll TikTok 45 min",
 ].join("\n")
@@ -133,7 +134,9 @@ export function captureLine(line: string, taken: Set<string>, ratios: Partial<Re
   const duration = explicit ?? Math.max(5, Math.round((defaults.duration_min * ratio) / 5) * 5)
   if (explicit === null) estimated.push("duration_min")
 
-  const buffer = bufferMatch ? Number(bufferMatch[1]) : defaults.buffer_min
+  // Outdoor activity starts at the door: only gym-style sessions get a default travel buffer.
+  const startsAtTheDoor = archetype === "dumbbell" && /\b(run|running|jog|jogging|walk|cycle|cycling)\b/i.test(text)
+  const buffer = bufferMatch ? Number(bufferMatch[1]) : startsAtTheDoor ? 0 : defaults.buffer_min
   if (!bufferMatch) estimated.push("buffer_min")
 
   const mandatory = MANDATORY_WORDS.test(text)

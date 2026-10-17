@@ -142,15 +142,39 @@ type Exchange = NonNullable<Decision["exchanges"]>[number]
 function scriptFor(decision: Decision, rounds: number): Exchange[] {
   const given = (decision.exchanges ?? []).filter((exchange) => exchange.round <= rounds && exchange.text)
   if (given.length) return given
-  return [{ round: 1, speaker: "defense", text: decision.defense }, { round: 1, speaker: "prosecution", text: decision.prosecution }]
+  // Until the backend sends real rounds, later rounds are built only from what the court already decided.
+  const trim = (text: string) => text.replace(/[.\s]+$/, "")
+  const script: Exchange[] = [{ round: 1, speaker: "defense", text: decision.defense }, { round: 1, speaker: "prosecution", text: decision.prosecution }]
+  if (rounds >= 2) {
+    const defence = decision.verdict === "DISMISSED"
+      ? decision.suggested_need ? `Then hear my real purpose, Your Honour: ${decision.suggested_need.need}. That is all I can prove.` : "I have no further evidence, Your Honour."
+      : decision.first_move ? `Give me ${decision.approved_min} minutes and I start right now: ${trim(decision.first_move)}.` : `Give me ${decision.approved_min} minutes and nothing more.`
+    const prosecution = decision.cut_scope.length
+      ? `Then this stays out today: ${decision.cut_scope.map(trim).join("; ")}.`
+      : decision.verdict === "APPROVED" ? "No further objection, as long as it stays inside its time." : `The record says it plainly: ${trim(decision.reason)}.`
+    script.push({ round: 2, speaker: "defense", text: defence }, { round: 2, speaker: "prosecution", text: prosecution })
+  }
+  if (rounds >= 3) {
+    script.push(
+      { round: 3, speaker: "defense", text: decision.done_when ? `And I stop the moment this is true: ${trim(decision.done_when)}.` : "I rest my case." },
+      { round: 3, speaker: "prosecution", text: `Final word for the court: ${trim(decision.reason)}.` },
+    )
+  }
+  return script
 }
 
-function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPardon, onCallJudge, onAppeal, pardonsUsed, busy, replay }: {
+function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPardon, onCallJudge, onAppeal, pardonsUsed, busy, replay, startSeated, onPlayed, onReplayAll }: {
   result: TrialResult; caseData: Case; relations: InitResult["relations"]; onSeeDay: () => void; onCrossExamine: (id: string) => void; onPardon: (id: string) => void; onCallJudge: (id: string) => void; onAppeal: (id: string) => void; pardonsUsed: number; busy: boolean
   replay?: { taskId: string; key: number } | null
+  /** The trial was already staged for this result: come back seated instead of replaying everything. */
+  startSeated?: boolean
+  onPlayed?: () => void
+  onReplayAll?: () => void
 }) {
   const reduceMotion = useReducedMotion()
-  const instant = caseData.rules.mode === "immediate" || Boolean(reduceMotion)
+  const startSeatedRef = useRef(Boolean(startSeated) && !replay)
+  const instant = caseData.rules.mode === "immediate" || Boolean(reduceMotion) || startSeatedRef.current
+  const timersRef = useRef<number[]>([])
   const [activeIndex, setActiveIndex] = useState(instant ? result.decisions.length : 0)
   const [phase, setPhase] = useState<CourtPhase>(instant ? "sitting" : "walking")
   const [seatedIds, setSeatedIds] = useState<string[]>(() => instant ? result.decisions.map((decision) => decision.task_id) : [])
@@ -176,7 +200,9 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
       return
     }
     setSeatedIds(replayIndex >= 0 ? everyone.filter((id) => id !== replay?.taskId) : [])
+    if (replayIndex < 0) onPlayed?.()
     const timers: number[] = []
+    timersRef.current = timers
     const at = (time: number, run: () => void) => timers.push(window.setTimeout(run, time))
     let time = 0
     order.forEach((index) => {
@@ -198,9 +224,9 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
   }, [caseData.rules.mode, instant, result.decisions.length, replayKey, rounds])
   const verdicts = ["APPROVED", "REDUCED", "DISMISSED"] as const
   const byVerdict = (verdict: Verdict) => result.decisions.filter((decision) => decision.verdict === verdict && seatedIds.includes(decision.task_id))
-  const skip = () => { setSeatedIds(result.decisions.map((decision) => decision.task_id)); setPhase("sitting"); setActiveIndex(result.decisions.length) }
+  const skip = () => { timersRef.current.forEach(window.clearTimeout); timersRef.current = []; setSeatedIds(result.decisions.map((decision) => decision.task_id)); setPhase("sitting"); setActiveIndex(result.decisions.length) }
   return <section className={`new-stage courtroom-new ${phase === "hit" && !reduceMotion ? "court-shake" : ""}`}>
-    <div className="courtroom-topline"><div><span className="new-eyebrow">THE EVIDENCE IS HEARD</span><h1>The Courtroom</h1><p>Every matter gets its moment. Every minute has a witness.</p></div><button className="skip-verdict" onClick={skip}><ArrowDown /> Skip to the verdict</button></div>
+    <div className="courtroom-topline"><div><span className="new-eyebrow">THE EVIDENCE IS HEARD</span><h1>The Courtroom</h1><p>Every matter gets its moment. Every minute has a witness.</p></div><div className="court-controls">{!allSeated && <button className="skip-verdict" onClick={skip}><ArrowDown /> Skip testimony</button>}{allSeated && onReplayAll && <button className="skip-verdict" onClick={onReplayAll}><ArrowLeft /> Replay the trial</button>}</div></div>
     <div className={`court-scene ${phase === "hit" ? "scene-objection" : ""} ${phase === "verdict" && activeDecision ? `scene-verdict scene-tone-${verdictTone[activeDecision.verdict]}` : ""}`}>
       <div className="scene-curtain" aria-hidden="true" />
       <div className="scene-title"><span>IN THE MATTER OF</span><strong>YOUR DAY</strong></div>
@@ -356,6 +382,8 @@ export default function TrialExperience() {
   const [orderTaskId, setOrderTaskId] = useState<string | null>(null)
   const [revision, setRevision] = useState<ReviseResult | null>(null)
   const [replay, setReplay] = useState<{ taskId: string; key: number } | null>(null)
+  const [seenTrialId, setSeenTrialId] = useState<string | null>(null)
+  const [replayAllKey, setReplayAllKey] = useState(0)
   const requestedRevision = useRef<string | null>(null)
   const currentTask = caseData.tasks.find((task) => task.id === crossTaskId) ?? null
   const orderTask = caseData.tasks.find((task) => task.id === orderTaskId) ?? null
@@ -398,6 +426,7 @@ export default function TrialExperience() {
       setCrossAnswer(null)
       // Back to the jury: the appealed task takes the stand again and is re-sentenced.
       setReplay({ taskId: currentTask.id, key: Date.now() })
+      setSeenTrialId(updated.request_id)
       setStage("courtroom")
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The appeal could not be heard.") }
     finally { setBusy(false) }
@@ -410,6 +439,7 @@ export default function TrialExperience() {
       const updated = await pardon(input)
       setResult(updated)
       setReplay({ taskId: id, key: Date.now() })
+      setSeenTrialId(updated.request_id)
       setStage("courtroom")
       setPardonIds((previous) => [...previous, id])
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The pardon could not be granted.") }
@@ -455,7 +485,7 @@ export default function TrialExperience() {
     <header className="new-court-header"><a className="new-brand" href="#top"><span className="new-brand-mark"><Gavel /></span><span><strong>Tasks on Trial</strong><small>The calendar starts empty. Your tasks must earn their place.</small></span></a><div className="header-recovered"><span>TIME RECOVERED</span><strong>{result?.metrics.minutes_recovered ?? 0}<small> MIN</small></strong></div><span className={`new-source-pill ${source.toLowerCase()}`}><i /> {source}</span></header>
     <main className="new-main" id="top"><nav className="new-stepper" aria-label="Trial stages">{(["docket", "courtroom", "sentence"] as const).map((step, index) => <button key={step} className={`${stage === step ? "active" : ""} ${index < (["docket", "courtroom", "sentence"].indexOf(stage)) ? "complete" : ""}`} onClick={() => { if (step === "docket") setStage("docket"); else if (result) setStage(step) }} disabled={step !== "docket" && !result}><span>{index + 1}</span>{step === "docket" ? "Docket" : step === "courtroom" ? "Courtroom" : "Sentence"}</button>)}</nav>
       {error && <div className="court-error global-error" role="alert"><span>{error}</span><button onClick={() => setError("")}>Dismiss</button></div>}
-      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom result={result} caseData={caseData} relations={initData?.relations ?? []} onSeeDay={() => setStage("sentence")} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} pardonIds={pardonIds} /></motion.div>}</AnimatePresence>
+      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} pardonIds={pardonIds} /></motion.div>}</AnimatePresence>
     </main><footer className="new-footer"><span>THE COURT OF A REASONABLE DAY</span><span>Nothing earns time by default.</span></footer>
     {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} />}
     {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} />}
