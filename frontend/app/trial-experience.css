@@ -218,3 +218,25 @@
 .focus-window p{width:100%;margin:0;color:#7a7468;font-size:11px}
 .alliance-banner{position:absolute;top:54px;left:50%;z-index:11;display:flex;align-items:center;gap:8px;padding:7px 14px;color:#1f2f38;border:2px solid #3f9bd1;border-radius:20px;background:#eef7fd;box-shadow:0 6px 18px #0006;font-size:13px;font-weight:800;white-space:nowrap;translate:-50% 0}
 .alliance-banner span{font-size:16px;animation:now-pulse 1.6s ease-in-out infinite}
+
+/* Sentence timetable: fixed pixels per minute, readable blocks, hour grid that matches the labels */
+@media(min-width:981px){.trial-experience .day-overview{grid-template-columns:minmax(330px,1fr) minmax(350px,1.1fr)}}
+.trial-experience .timeline-axis{padding-left:54px}
+.trial-experience .hour-labels{width:48px}
+.trial-experience .hour-labels span{font-size:11px;font-weight:600}
+.trial-experience .timeline-track-new{background-color:#f5f7ee;background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hour-px,60px) - 1px),#e4e6da calc(var(--hour-px,60px) - 1px),#e4e6da var(--hour-px,60px))}
+.trial-experience .time-block-new{right:6px;left:6px;padding:7px 10px;border-radius:7px;box-shadow:0 2px 6px #1f2f3818;gap:1px}
+.trial-experience .time-block-new strong{font-size:13px;font-weight:700}
+.trial-experience .time-block-new small{font-size:11px}
+.trial-experience .time-block-new.is-short{flex-direction:row;align-items:center;justify-content:space-between;gap:8px;padding:0 10px}
+.trial-experience .time-block-new.is-short small{margin:0;white-space:nowrap}
+.trial-experience .time-block-new.is-short .now-chip{position:static}
+.trial-experience .fixed-block-new{color:#6b5a3a!important}
+/* Pact: the merged task sits with its partner */
+.seated-character.is-merged{position:relative}
+.merged-tag{display:inline-block;margin-top:3px;padding:2px 7px;color:#1f4d33;border-radius:9px;background:#d8f0dc;box-shadow:0 0 0 1px #2f6b4555;font-size:10px;font-style:normal;font-weight:800;white-space:nowrap}
+.day-task-tile.is-merged{border-style:dashed!important;background:#f3f8f1!important}
+.verdict-badge.merged{color:#2f6b45;background:#dcefe0}
+.trial-experience .time-block-new.tone-approved{border-left:4px solid #8fd1a6}
+.trial-experience .time-block-new.tone-reduced{border-left:4px solid #e0bd6f}
+.trial-experience .time-block-new.is-short strong{font-size:12px}
