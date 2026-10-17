@@ -204,3 +204,22 @@ even with a matching citation. Retained minutes are never counted as recovered.
 This verifies citation provenance, not whether the fact logically justifies the
 verdict. The model still has to assess relevance and fairness. The private citation
 field does not change the public API; recorded replay fixtures stay unchanged.
+
+## Six-task local evaluation
+
+`tests/test_six_task_evaluation.py` covers six synthetic workloads in both English
+and Spanish (12 cases): full-scope scheduling, mixed supported and rejected scope
+changes, competing mandatory deadlines, mandatory leisure with work ranked first,
+an exact deadline finish, and dependencies spanning a fixed break.
+
+Each workload contains six tasks totalling 300 requested minutes. Checks cover the
+public JSON round trip, complete task coverage, calendar bounds and overlaps,
+action-plan sums, approved/pending/scheduled minute conservation, and explicit
+expected savings and capacity. Missed deadlines remain pending without creating
+recovered minutes. Language cases verify that task text survives the backend;
+they do not assess translation or model reasoning. Recommendations are constructed
+locally, with no provider calls. Run with:
+
+```sh
+backend/.venv/bin/python -m pytest backend/tests/test_six_task_evaluation.py -q
+```
