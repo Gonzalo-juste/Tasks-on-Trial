@@ -12,6 +12,8 @@ import { demoCase } from "@/lib/mocks"
 import type { Archetype, Case, Decision, InitResult, InterrogationResult, Proposal, QuestionType, ReviseResult, Task, TrialResult, Verdict } from "@/lib/types"
 
 const verdictTone: Record<Verdict, string> = { APPROVED: "approved", REDUCED: "reduced", DISMISSED: "dismissed" }
+// The shortest block on the Sentence timeline: enough for a title and its times on one line.
+const MIN_BLOCK_PX = 24
 /** Display only: drop engine codes like "not_proven: " (the raw reason must go back to the backend unchanged). */
 const cleanReason = (reason: string) => reason.replace(/^[a-z_]+:\s*/, "")
 // Questions that make sense for where the task ended up: no "why so long?" to a task that got zero minutes.
@@ -33,28 +35,40 @@ const QUESTIONS_BY_VERDICT: Record<Verdict, { label: string; type: QuestionType;
   ],
 }
 /** Two compatible tasks join forces: a dismissed task folds into an ally that the court kept. */
-interface Pact { allyId: string; allyTitle: string; pitch: string; proposal: Proposal }
+interface Pact { allyId: string; allyTitle: string; targetId: string; mergeId: string; pitch: string; proposal: Proposal }
 
+/**
+ * Gym and run are compatible: whichever was dismissed can partner with the one the court kept.
+ * The pact is always filed on the gym (its 60 minutes leave room for a strictly smaller combined session)
+ * and the run is merged into it: running to the gym replaces the commute.
+ */
 function buildPact(dismissed: Decision, tasks: Task[], decisions: Decision[]): Pact | null {
   if (dismissed.verdict !== "DISMISSED") return null
-  const gymTask = tasks.find((task) => task.id === dismissed.task_id)
-  if (!gymTask || archetypeForTask(gymTask) !== "dumbbell") return null
-  const ally = decisions.find((decision) => decision.verdict !== "DISMISSED" && tasks.some((task) => task.id === decision.task_id && archetypeForTask(task) === "runner"))
-  const allyTask = ally && tasks.find((task) => task.id === ally.task_id)
-  if (!ally || !allyTask) return null
-  // The pact takes the gym's confirmed time (no increase): 1/3 running to the gym, 2/3 strength.
-  const minutes = gymTask.duration_min
-  const run = Math.max(5, Math.round(minutes / 3))
+  const kindOf = (id: string) => { const task = tasks.find((item) => item.id === id); return task ? archetypeForTask(task) : null }
+  const dismissedKind = kindOf(dismissed.task_id)
+  if (dismissedKind !== "dumbbell" && dismissedKind !== "runner") return null
+  const partnerKind = dismissedKind === "dumbbell" ? "runner" : "dumbbell"
+  const ally = decisions.find((decision) => decision.verdict !== "DISMISSED" && !decision.merged_into && kindOf(decision.task_id) === partnerKind)
+  if (!ally) return null
+  const gymTask = tasks.find((task) => task.id === (dismissedKind === "dumbbell" ? dismissed.task_id : ally.task_id))
+  const runTask = tasks.find((task) => task.id === (dismissedKind === "runner" ? dismissed.task_id : ally.task_id))
+  const allyTask = tasks.find((task) => task.id === ally.task_id)
+  if (!gymTask || !runTask || !allyTask) return null
+  const minutes = Math.max(10, gymTask.duration_min - 5)
+  const run = Math.min(20, Math.round(minutes / 3) + 1)
+  const commute = gymTask.buffer_min || 20
   return {
     allyId: ally.task_id,
     allyTitle: allyTask.title,
-    pitch: `"We're both here for your health. Let me run you to the gym: the run replaces the ${gymTask.buffer_min || 20}-minute commute, and you still train. Two tasks, one ${minutes}-minute session."`,
+    targetId: gymTask.id,
+    mergeId: runTask.id,
+    pitch: `"We're both here for your health. Run to the gym: the run replaces the ${commute}-minute commute, and you still train. Two tasks, one ${minutes}-minute session."`,
     proposal: {
       title: "Run to the gym + strength circuit",
       duration_min: minutes,
       need: "health",
       saved_min: 0,
-      cut_scope: [`The ${gymTask.buffer_min || 20}-minute commute (you run there instead)`, "A separate gym session"],
+      cut_scope: [`The ${commute}-minute commute (you run there instead)`, "A separate run"],
       first_move: "Put on your running shoes and head for the gym.",
       action_plan: [{ step: "Run to the gym", minutes: run }, { step: "Strength circuit at the gym", minutes: minutes - run }],
       done_when: "You ran there and finished the circuit.",
@@ -232,13 +246,14 @@ function scriptFor(decision: Decision, rounds: number): Exchange[] {
   return script
 }
 
-function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPardon, onCallJudge, onAppeal, pardonsUsed, busy, replay, startSeated, onPlayed, onReplayAll }: {
+function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPardon, onCallJudge, onAppeal, pardonsUsed, busy, replay, startSeated, onPlayed, onReplayAll, alliance }: {
   result: TrialResult; caseData: Case; relations: InitResult["relations"]; onSeeDay: () => void; onCrossExamine: (id: string) => void; onPardon: (id: string) => void; onCallJudge: (id: string) => void; onAppeal: (id: string) => void; pardonsUsed: number; busy: boolean
   replay?: { taskId: string; key: number } | null
   /** The trial was already staged for this result: come back seated instead of replaying everything. */
   startSeated?: boolean
   onPlayed?: () => void
   onReplayAll?: () => void
+  alliance?: string | null
 }) {
   const reduceMotion = useReducedMotion()
   const startSeatedRef = useRef(Boolean(startSeated) && !replay)
@@ -309,13 +324,17 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseData.rules.mode, instant, result.decisions.length, replayKey, rounds])
   const verdicts = ["APPROVED", "REDUCED", "DISMISSED"] as const
-  const byVerdict = (verdict: Verdict) => result.decisions.filter((decision) => decision.verdict === verdict && seatedIds.includes(decision.task_id))
+  // A task folded into another through a pact sits on its partner's bench, not with the dismissed.
+  const benchOf = (decision: Decision) => result.decisions.find((item) => item.task_id === decision.merged_into)?.verdict ?? decision.verdict
+  const byVerdict = (verdict: Verdict) => result.decisions.filter((decision) => benchOf(decision) === verdict && seatedIds.includes(decision.task_id))
+  const partnerTitle = (decision: Decision) => caseData.tasks.find((task) => task.id === decision.merged_into)?.title
   const skip = () => { clearTimers(); setSeatedIds(result.decisions.map((decision) => decision.task_id)); setPhase("sitting"); setActiveIndex(result.decisions.length) }
   return <section className={`new-stage courtroom-new ${phase === "hit" && !reduceMotion ? "court-shake" : ""}`}>
     <div className="courtroom-topline"><div><span className="new-eyebrow">THE EVIDENCE IS HEARD</span><h1>The Courtroom</h1><p>Every matter gets its moment. Every minute has a witness.</p></div><div className="court-controls">{!allSeated && phase !== "verdict" && phase !== "sitting" && <button className="skip-verdict skip-one" onClick={skipTestimony}><ArrowRight /> Skip this testimony</button>}{!allSeated && <button className="skip-verdict" onClick={skip}><ArrowDown /> Skip all testimony</button>}{allSeated && onReplayAll && <button className="skip-verdict" onClick={onReplayAll}><ArrowLeft /> Replay the trial</button>}</div></div>
     <div className={`court-scene ${phase === "hit" ? "scene-objection" : ""} ${phase === "verdict" && activeDecision ? `scene-verdict scene-tone-${verdictTone[activeDecision.verdict]}` : ""}`}>
       <div className="court-architecture" aria-hidden="true"><div className="court-coffer" /><div className="court-column court-column-left" /><div className="court-column court-column-right" /><div className="court-sconce court-sconce-left" /><div className="court-sconce court-sconce-right" /><div className="court-parquet" /></div>
       <div className="scene-curtain" aria-hidden="true" />
+      <AnimatePresence>{alliance && <motion.div className="alliance-banner" initial={{ opacity: 0, y: -12, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 16 }}><span>💞</span>{alliance}</motion.div>}</AnimatePresence>
       <span className="granted-budget-stamp">Budget: {courtBudget} min</span>
       <div className="scene-title"><span>IN THE MATTER OF</span><strong>YOUR DAY</strong></div>
       <div className="judge-bench-scene"><JudgeCharacter striking={phase === "verdict"} /><div className="judge-nameplate"><span>JUDGE&apos;S BENCH</span><strong>{phase === "verdict" ? "Order!" : "The Honourable Day"}</strong></div></div>
@@ -334,8 +353,9 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         if (!task) return null
         const activeMenu = menuTask === task.id
-        const pardonAvailable = pardonsUsed < 2 && decision.verdict !== "APPROVED"
-        return <div className="seated-character" key={task.id}><TaskCharacter archetype={artFor(decision, caseData.tasks)} state={activeMenu ? "speaking" : "sitting"} prisonerNumber={result.decisions.findIndex((item) => item.task_id === task.id) + 1} variant={decision.verdict === "DISMISSED" ? "defendant" : "on-duty"} label={`Open actions for ${decision.effective_title}`} onClick={() => setMenuTask(activeMenu ? null : task.id)} /><span>{decision.effective_title}</span>{activeMenu && <div className="radial-menu"><button onClick={() => onCrossExamine(task.id)}>Cross-examine</button>{pardonAvailable && <button disabled={busy} onClick={() => { setMenuTask(null); onPardon(task.id) }}>Pardon ({2 - pardonsUsed} left)</button>}{decision.verdict !== "DISMISSED" && <button onClick={() => onCallJudge(task.id)}>Call the judge</button>}{decision.verdict === "REDUCED" && <button onClick={() => onAppeal(task.id)}>Appeal</button>}</div>}</div>
+        const merged = decision.merged_into ? partnerTitle(decision) : undefined
+        const pardonAvailable = pardonsUsed < 2 && decision.verdict !== "APPROVED" && !decision.merged_into
+        return <div className={`seated-character ${merged ? "is-merged" : ""}`} key={task.id}><TaskCharacter archetype={artFor(decision, caseData.tasks)} state={activeMenu ? "speaking" : "sitting"} prisonerNumber={result.decisions.findIndex((item) => item.task_id === task.id) + 1} variant={decision.verdict === "DISMISSED" && !merged ? "defendant" : "on-duty"} label={`Open actions for ${decision.effective_title}`} onClick={() => setMenuTask(activeMenu ? null : task.id)} /><span>{decision.effective_title}</span>{merged && <em className="merged-tag">🤝 with {merged}</em>}{activeMenu && <div className="radial-menu"><button onClick={() => { setMenuTask(null); onCrossExamine(task.id) }}>Cross-examine</button>{pardonAvailable && <button disabled={busy} onClick={() => { setMenuTask(null); onPardon(task.id) }}>Pardon ({2 - pardonsUsed} left)</button>}{decision.verdict !== "DISMISSED" && <button onClick={() => onCallJudge(task.id)}>Call the judge</button>}{decision.verdict === "REDUCED" && <button onClick={() => onAppeal(task.id)}>Appeal</button>}</div>}</div>
       })}</div></section>)}</div>
       <div className="time-recovered"><span className="hourglass-icon">⌛</span><div><small>TIME RECOVERED</small><strong>{result.metrics.minutes_recovered}<em> min</em></strong></div><div className="jar-fill"><i style={{ height: `${Math.min(100, result.metrics.minutes_recovered / 1.8)}%` }} /></div></div>
       {relationTasks.length > 0 && <div className="relations-legend" aria-label="Task relationships">{relationTasks.map((relation) => <span key={`${relation.a?.id}-${relation.b?.id}`} className={`relation-${relation.type}`}>{relation.type === "ally" ? "🤝" : relation.type === "rival" ? "⚡" : "⛓"} {relation.a?.title} ↔ {relation.b?.title}</span>)}</div>}
@@ -353,6 +373,9 @@ function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrd
   const dayStart = minutes(caseData.constitution.start)
   const dayEnd = minutes(caseData.constitution.end)
   const span = Math.max(1, dayEnd - dayStart)
+  // Fixed pixels per minute so a 10-minute task is still readable; long days scroll instead of squashing.
+  const pxPerMin = Math.max(2.6, 560 / span)
+  const trackHeight = Math.round(span * pxPerMin)
   const fixed = caseData.constitution.fixed_blocks
   const timelineEntries = [
     ...scheduled.map(({ slot, task, decision }) => ({ start: slot.start, end: slot.end, title: decision?.effective_title ?? task?.title ?? "Task", type: "task", task, decision, buffer: slot.buffer_min, rest: slot.rest_after_min ?? 0 })),
@@ -363,6 +386,9 @@ function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrd
   const isCurrent = (entry: { type: string; start: string; end: string; task?: Task }) => activeTaskId
     ? entry.type === "task" && entry.task?.id === activeTaskId
     : minutes(entry.start) <= nowMinutes && nowMinutes < minutes(entry.end)
+  // Court orders follow the clock; a merged task sits right after its partner, unscheduled ones last.
+  const slotStart = (id?: string) => { const slot = result.schedule.find((item) => item.task_id === id); return slot ? minutes(slot.start) : 24 * 60 }
+  const tileOrder = (decision: Decision) => decision.merged_into ? slotStart(decision.merged_into) + 0.5 : slotStart(decision.task_id)
   const freeGaps: { start: number; end: number }[] = []
   let cursor = dayStart
   timelineEntries.forEach((entry) => {
@@ -376,11 +402,14 @@ function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrd
     <div className="courtroom-topline sentence-topline"><div><span className="new-eyebrow">THE SENTENCE · YOUR DAY, RETURNED</span><h1>{demoSentence ? "Five tasks entered. Four survived. The day belongs to you again." : "Here's your day."}</h1><p>{demoSentence ? "A considered plan, with room left to breathe." : "A considered plan, with room left to breathe."}</p></div><button className="back-to-court" onClick={onBack}><ArrowLeft /> Back to the courtroom</button></div>
     <div className="sentence-summary-new"><div><small>TIME RECOVERED</small><strong>{result.metrics.minutes_recovered}<em> min</em></strong></div><p>{demoSentence ? `Allocated ${allocatedMinutes} · ${result.metrics.minutes_recovered} MINUTES RECOVERED · ${result.metrics.free_capacity_min} unallocated.` : result.judge_summary}</p><span>FREE CAPACITY <b>{result.metrics.free_capacity_min} MIN</b></span></div>
     {pardonIds.length > 0 && <div className="pardon-banner"><ShieldCheck /> Pardoned and returned to the day: {pardonIds.map((id) => caseData.tasks.find((task) => task.id === id)?.title).filter(Boolean).join(", ")}</div>}
-    <div className="day-overview"><section className="timeline-new"><div className="overview-head"><div><span className="new-eyebrow">A CLEARER DAY</span><h2>The timeline</h2></div><span>{caseData.constitution.start} — {caseData.constitution.end}</span></div><div className="timeline-axis"><div className="hour-labels">{Array.from({ length: Math.floor(span / 60) + 1 }, (_, index) => dayStart + index * 60).filter((time) => time <= dayEnd).map((time) => <span key={time} style={{ top: `${((time - dayStart) / span) * 100}%` }}>{clock(time)}</span>)}</div><div className="timeline-track-new">{freeGaps.map((gap) => <div key={`free-${gap.start}`} className="free-gap-new" style={{ top: `${((gap.start - dayStart) / span) * 100}%`, height: `${((gap.end - gap.start) / span) * 100}%` }}><span>Free</span></div>)}{timelineEntries.map((entry, index) => <div key={`${entry.type}-${index}`} className={`time-block-new ${entry.type === "fixed" ? "fixed-block-new" : ""} ${isCurrent(entry) ? "is-current" : ""}`} style={{ top: `${((minutes(entry.start) - dayStart) / span) * 100}%`, height: `${Math.max(3, ((minutes(entry.end) - minutes(entry.start)) / span) * 100)}%` }}><strong>{entry.title}</strong><small>{entry.start}–{entry.end}</small>{entry.type === "task" && entry.buffer > 0 && <span className="buffer-hatch" style={{ width: `${Math.min(55, (entry.buffer / Math.max(minutes(entry.end) - minutes(entry.start), 1)) * 100)}%` }} title={`${entry.buffer} min travel/setup`} />}{entry.type === "task" && (entry.rest ?? 0) > 0 && <span className="rest-band" style={{ height: `${Math.min(40, ((entry.rest ?? 0) / Math.max(minutes(entry.end) - minutes(entry.start), 1)) * 100)}%` }} title={`${entry.rest} min break`}>break</span>}{isCurrent(entry) && <span className="now-chip">NOW</span>}</div>)}</div></div><div className="timeline-legend-new"><span><i className="legend-scheduled" />Scheduled</span><span><i className="legend-hatched" />Travel/setup</span><span><i className="legend-free-dashed" />Free</span></div></section>
-      <section className="day-tiles"><div className="overview-head"><div><span className="new-eyebrow">YOUR COURT ORDERS</span><h2>Today&apos;s matters</h2></div><span>{scheduled.length} scheduled</span></div><div className="order-tile-list">{result.decisions.map((decision) => {
+    <div className="day-overview"><section className="timeline-new"><div className="overview-head"><div><span className="new-eyebrow">A CLEARER DAY</span><h2>The timeline</h2></div><span>{caseData.constitution.start} — {caseData.constitution.end}</span></div><div className="timeline-axis" style={{ height: `${trackHeight}px`, ["--hour-px" as string]: `${pxPerMin * 60}px` }}><div className="hour-labels">{Array.from({ length: Math.floor(span / 60) + 1 }, (_, index) => dayStart + index * 60).filter((time) => time <= dayEnd).map((time) => <span key={time} style={{ top: `${((time - dayStart) / span) * 100}%` }}>{clock(time)}</span>)}</div><div className="timeline-track-new">{freeGaps.map((gap) => <div key={`free-${gap.start}`} className="free-gap-new" style={{ top: `${((gap.start - dayStart) / span) * 100}%`, height: `${((gap.end - gap.start) / span) * 100}%` }}><span>Free</span></div>)}{timelineEntries.map((entry, index) => <div key={`${entry.type}-${index}`} className={`time-block-new ${entry.type === "fixed" ? "fixed-block-new" : ""} ${isCurrent(entry) ? "is-current" : ""} ${entry.decision ? `tone-${verdictTone[entry.decision.verdict]}` : ""} ${(minutes(entry.end) - minutes(entry.start)) * pxPerMin < 44 ? "is-short" : ""}`} style={{ top: `${(minutes(entry.start) - dayStart) * pxPerMin}px`, height: `${Math.max(MIN_BLOCK_PX, (minutes(entry.end) - minutes(entry.start)) * pxPerMin - 2)}px` }}><strong>{entry.title}</strong><small>{entry.start}–{entry.end}</small>{entry.type === "task" && entry.buffer > 0 && <span className="buffer-hatch" style={{ width: `${Math.min(55, (entry.buffer / Math.max(minutes(entry.end) - minutes(entry.start), 1)) * 100)}%` }} title={`${entry.buffer} min travel/setup`} />}{entry.type === "task" && (entry.rest ?? 0) > 0 && <span className="rest-band" style={{ height: `${Math.min(40, ((entry.rest ?? 0) / Math.max(minutes(entry.end) - minutes(entry.start), 1)) * 100)}%` }} title={`${entry.rest} min break`}>break</span>}{isCurrent(entry) && <span className="now-chip">NOW</span>}</div>)}</div></div><div className="timeline-legend-new"><span><i className="legend-scheduled" />Scheduled</span><span><i className="legend-hatched" />Travel/setup</span><span><i className="legend-free-dashed" />Free</span></div></section>
+      <section className="day-tiles"><div className="overview-head"><div><span className="new-eyebrow">YOUR COURT ORDERS</span><h2>Today&apos;s matters</h2></div><span>{scheduled.length} scheduled</span></div><div className="order-tile-list">{[...result.decisions].sort((a, b) => tileOrder(a) - tileOrder(b)).map((decision) => {
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         const slot = result.schedule.find((item) => item.task_id === decision.task_id)
         if (!task) return null
+        const partner = decision.merged_into ? result.schedule.find((item) => item.task_id === decision.merged_into) : undefined
+        const partnerName = decision.merged_into ? caseData.tasks.find((item) => item.id === decision.merged_into)?.title : undefined
+        if (decision.merged_into) return <div className="day-task-tile is-merged" key={task.id} role="button" tabIndex={0} aria-label={`${decision.effective_title}, merged into ${partnerName}`} onClick={() => openOrder(decision.merged_into!)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openOrder(decision.merged_into!) } }}><TaskCharacter archetype={artFor(decision, caseData.tasks)} variant="on-duty" compact label={`${task.title}, partnered`} /><span className="tile-main"><strong>{decision.effective_title}</strong><small>{partner ? `Inside ${partner.start}–${partner.end} · part of the pact` : `Joined ${partnerName}`}</small><span className="verdict-badge merged">🤝 MERGED WITH {partnerName?.toUpperCase()}</span></span><ArrowRight /></div>
         return <div className="day-task-tile" key={task.id} role="button" tabIndex={0} aria-label={`Open court order for ${decision.effective_title}`} onClick={() => openOrder(task.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openOrder(task.id) } }}><TaskCharacter archetype={artFor(decision, caseData.tasks)} variant="on-duty" compact label={`${task.title}, on duty`} /><span className="tile-main"><strong>{decision.effective_title}</strong><small>{slot ? `${slot.start}–${slot.end}` : "Not scheduled today"}</small><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}{pardonIds.includes(task.id) && " · PARDONED"}</span></span>{decision.saved_min > 0 && <span className="tile-saved">SAVED {decision.saved_min} MIN</span>}{slot && decision.verdict !== "DISMISSED" && <button className="tile-start" onClick={(event) => { event.stopPropagation(); onStart(task.id) }}>▶ Start</button>}<ArrowRight /></div>
       })}</div></section>
     </div>
@@ -466,7 +495,7 @@ function CrossExamination({ task, decision, busy, answer, onAsk, onAppeal, onClo
   pact?: Pact | null; onPact?: () => void
 }) {
   const [fact, setFact] = useState("")
-  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{QUESTIONS_BY_VERDICT[decision?.verdict ?? "APPROVED"].map((question) => <button key={question.label} disabled={busy} onClick={() => onAsk(question.type, question.text)}>{question.label}<ArrowRight /></button>)}</div>{pact && answer && <motion.div className="pact-card" initial={{ opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}><span>🤝 {pact.allyTitle.toUpperCase()} STEPS FORWARD WITH A PACT</span><strong>{pact.proposal.title}</strong><p>{pact.pitch}</p><ol>{pact.proposal.action_plan.map((step: { step: string; minutes: number }) => <li key={step.step}>{step.step} · {step.minutes} min</li>)}</ol><small>Not today: {pact.proposal.cut_scope.join(" · ")}</small><button disabled={busy} onClick={onPact}>Accept the pact — let the judge rule</button></motion.div>}{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{witnessLine(answer)}</p>{answer.proposal && <div className="cross-plea"><strong>🤝 Plea deal offered: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
+  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{QUESTIONS_BY_VERDICT[decision?.verdict ?? "APPROVED"].map((question) => <button key={question.label} disabled={busy} onClick={() => onAsk(question.type, question.text)}>{question.label}<ArrowRight /></button>)}</div>{pact && answer?.question_type === "why_today" && <motion.div className="pact-card" initial={{ opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}><span>🤝 “I CAN COME BACK TODAY — IF I PARTNER WITH {pact.allyTitle.toUpperCase()}”</span><strong>{pact.proposal.title}</strong><p>{pact.pitch}</p><ol>{pact.proposal.action_plan.map((step: { step: string; minutes: number }) => <li key={step.step}>{step.step} · {step.minutes} min</li>)}</ol><small>Not today: {pact.proposal.cut_scope.join(" · ")}</small><button disabled={busy} onClick={onPact}>🤝 Partner with {pact.allyTitle} — back to trial</button></motion.div>}{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{pact && answer.question_type === "why_today" && /^\s*no comment/i.test(answer.answer) ? `“Not on my own, Your Honour… but I can partner with ${pact.allyTitle}.”` : witnessLine(answer)}</p>{answer.proposal && <div className="cross-plea"><strong>🤝 Plea deal offered: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
 }
 
 export default function TrialExperience() {
@@ -521,6 +550,8 @@ export default function TrialExperience() {
       const response = updateMockResult(rawResult, currentCase)
       setResult(response)
       setReplay(null)
+      setAlliance(null)
+      setMergedInto({})
       setSource(response.source === "live" ? "Live" : response.source === "replay" ? "Replay" : "Fallback")
       setStage("courtroom")
     } catch (cause) {
@@ -590,6 +621,8 @@ export default function TrialExperience() {
   }
   // Dismissed task id -> the ally it merged into through a pact (display only; the backend judged the ally's appeal).
   const [mergedInto, setMergedInto] = useState<Record<string, string>>({})
+  // Shown in the courtroom once two tasks have made a pact: their relationship improved.
+  const [alliance, setAlliance] = useState<string | null>(null)
   const pactFor = (taskId: string | null) => {
     const decision = result?.decisions.find((item) => item.task_id === taskId)
     return decision && !mergedInto[decision.task_id] ? buildPact(decision, caseData.tasks, result?.decisions ?? []) : null
@@ -605,9 +638,9 @@ export default function TrialExperience() {
     try {
       // The dismissed task takes the pact; its ally is merged into it and the commute buffer goes to zero.
       const send = (proposal: Proposal) => appeal({
-        case: trialCase(), task_id: taskId,
+        case: trialCase(), task_id: pact.targetId,
         new_fact: `${gymTitle} and ${pact.allyTitle} agreed a pact: running to the gym replaces the commute, so both are served in one session.`,
-        accepted_replacement: { ...proposal, buffer_min: 0 }, merge_task_ids: [pact.allyId],
+        accepted_replacement: { ...proposal, buffer_min: 0 }, merge_task_ids: [pact.mergeId],
         previous_result: result, base_revision: result.revision,
       })
       let updated: TrialResult
@@ -621,8 +654,9 @@ export default function TrialExperience() {
         updated = await send({ ...pact.proposal, duration_min: minutes, action_plan: [{ step: "Run to the gym", minutes: run }, { step: "Strength circuit at the gym", minutes: minutes - run }] })
       }
       setResult(updated)
-      setMergedInto((current) => ({ ...current, [taskId]: pact.allyId, [pact.allyId]: taskId }))
-      setReplay({ taskId, key: Date.now() })
+      setMergedInto((current) => ({ ...current, [pact.mergeId]: pact.targetId }))
+      setAlliance(`${caseData.tasks.find((task) => task.id === pact.targetId)?.title ?? "Gym"} + ${caseData.tasks.find((task) => task.id === pact.mergeId)?.title ?? "Run"} are now allies: one session, no commute`)
+      setReplay({ taskId: pact.targetId, key: Date.now() })
       setSeenTrialId(updated.request_id)
       setStage("courtroom")
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The court could not hear the pact.") }
@@ -693,7 +727,7 @@ export default function TrialExperience() {
     <header className="new-court-header"><a className="new-brand" href="#top"><span className="new-brand-mark"><Gavel /></span><span><strong>Tasks on Trial</strong><small>The calendar starts empty. Your tasks must earn their place.</small></span></a><div className="header-recovered"><span>TIME RECOVERED</span><strong>{result?.metrics.minutes_recovered ?? 0}<small> MIN</small></strong></div><span className={`new-source-pill ${source.toLowerCase()}`}><i /> {source}</span></header>
     <main className="new-main" id="top"><nav className="new-stepper" aria-label="Trial stages">{(["docket", "courtroom", "sentence"] as const).map((step, index) => <button key={step} className={`${stage === step ? "active" : ""} ${index < (["docket", "courtroom", "sentence"].indexOf(stage)) ? "complete" : ""}`} onClick={() => { if (step === "docket") setStage("docket"); else if (result) setStage(step) }} disabled={step !== "docket" && !result}><span>{index + 1}</span>{step === "docket" ? "Docket" : step === "courtroom" ? "Courtroom" : "Sentence"}</button>)}</nav>
       {error && <div className="court-error global-error" role="alert"><span>{error}</span>{/restarted/i.test(error) && <button onClick={() => void reconvene()}>Reconvene the court</button>}<button onClick={() => setError("")}>Dismiss</button></div>}
-      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} onStart={startFocus} pardonIds={pardonIds} activeTaskId={activeTaskId} /></motion.div>}</AnimatePresence>
+      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} alliance={alliance} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} onStart={startFocus} pardonIds={pardonIds} activeTaskId={activeTaskId} /></motion.div>}</AnimatePresence>
     </main><footer className="new-footer"><span>THE COURT OF A REASONABLE DAY</span><span>Nothing earns time by default.</span></footer>
     {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} pact={pactFor(crossTaskId)} onPact={() => void acceptPact(crossTaskId)} />}
     {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} onStart={() => { setOrderTaskId(null); startFocus(orderTask.id) }} />}

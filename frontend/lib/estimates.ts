@@ -56,7 +56,7 @@ export const CHAOTIC_DAY = [
   "Finish pitch slides 90 min due 6pm",
   "Study for exam 90 min",
   "Gym 60 min + 20 min travel",
-  "Go for a run 60 min",
+  "Go for a run 30 min",
   "Reply to emails 30 min",
   "Scroll TikTok 45 min",
 ].join("\n")
