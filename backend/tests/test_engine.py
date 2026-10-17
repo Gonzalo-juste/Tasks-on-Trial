@@ -60,10 +60,10 @@ def test_mandatory_and_unauthorised_reduction_protected(trial_request):
     assert d.approved_min == 120 and d.verdict == 'APPROVED'
 
 
-def test_reductions_need_exact_fact_and_respect_minimum(trial_request):
+def test_reductions_reject_invented_citations_and_respect_minimum(trial_request):
     task = trial_request.case.tasks[2]
     r=Recommendation(task_id=task.id,defense='Emails',prosecution='Only urgent',recommendation='REDUCED',approved_min=1,effective_title='Urgent emails')
-    assert decide(task,r).verdict == 'APPROVED'
+    assert decide(task,r).verdict == 'REDUCED'
     r.fact_cited='invented fact'
     assert decide(task,r).verdict == 'APPROVED'
     r.fact_cited=task.facts[0]

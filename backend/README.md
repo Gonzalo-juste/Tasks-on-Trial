@@ -197,17 +197,20 @@ proposals and accepted replacements, so a repaired proposal and its accepted
 order remain consistent. Response fields, verdict rules and metrics are unchanged.
 This is a local deterministic repair; it makes no additional provider calls.
 
-## Evidence required for dismissals
+## Judge precedence, citations and budget cuts
 
-Generated dismissals, like reductions, require `fact_cited` to exactly match a
-confirmed fact belonging to that task. Missing, invented, paraphrased or other-task
-citations cause Python to retain the original title, scope and duration, remove the
-release order, and explain the rejected dismissal. Mandatory tasks remain protected
-even with a matching citation. Retained minutes are never counted as recovered.
+Carlos's latest clarification supersedes the earlier citation-required rule.
+The judge may dismiss a non-mandatory task without a citation, and may recommend an
+authorised reduction down to its minimum with a null citation. If a citation IS
+provided it must exactly match that task's facts; invented or borrowed citations
+still cause the proposed scope change to be rejected. Mandatory protection remains.
 
-This verifies citation provenance, not whether the fact logically justifies the
-verdict. The model still has to assess relevance and fairness. The private citation
-field does not change the public API; recorded replay fixtures stay unchanged.
+Python keeps valid judge verdicts unless their total work plus retained buffers
+exceeds the effective budget. It then visits lowest-priority categories first:
+non-mandatory tasks without facts are dismissed with a not_proven explanation;
+tasks with facts and reduction permission go down to their confirmed minimum.
+It stops as soon as the allocation fits and protects retained dependencies.
+See BUDGET_UPDATE.md for conflict handling and the two chaotic-day outcomes.
 
 ## Six-task local evaluation
 

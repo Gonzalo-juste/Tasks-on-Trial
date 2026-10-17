@@ -1,4 +1,4 @@
-"""Dismissals require an exact citation from the affected task's facts."""
+"""Optional citations must be genuine; null no longer prohibits dismissal."""
 import pytest
 
 from backend.schemas import Meta, Recommendation, Release, RunRequest
@@ -22,7 +22,6 @@ def dismissal(task, citation):
 
 
 @pytest.mark.parametrize('citation', [
-    None,
     'The user said this task is unnecessary.',
     'Only five emails require replies today',  # A paraphrase is not an exact quote.
     'Maths exam on Monday',  # A real fact belonging to another task.
@@ -34,7 +33,7 @@ def test_unsupported_dismissal_restores_original_scope_and_order(citation):
     assert result.verdict == 'APPROVED'
     assert result.approved_min == task.duration_min and result.saved_min == 0
     assert result.effective_title == task.title
-    assert 'No exact confirmed fact cited for the dismissal' in result.reason
+    assert 'cited an unconfirmed fact' in result.reason
     assert result.release is None and result.cut_scope == []
     assert result.schedule_status == 'PENDING'
     assert result.first_move != 'Throw away the materials.'
@@ -42,10 +41,11 @@ def test_unsupported_dismissal_restores_original_scope_and_order(citation):
     assert sum(step.minutes for step in result.action_plan) == task.duration_min
 
 
-def test_task_without_facts_cannot_be_dismissed():
+def test_judge_can_dismiss_a_nonmandatory_task_without_facts():
     task = request().case.tasks[1]
     assert task.facts == []
-    assert decide(task, dismissal(task, None)).verdict == 'APPROVED'
+    result = decide(task, dismissal(task, None))
+    assert result.verdict == 'DISMISSED' and result.approved_min == 0
 
 
 def test_exact_same_task_citation_allows_dismissal():
@@ -69,7 +69,7 @@ def test_rejected_dismissal_is_scheduled_and_not_counted_as_recovered():
     trial = request()
     proposal = from_demo(trial)
     instagram = next(r for r in proposal.decisions if r.task_id == 'instagram')
-    instagram.fact_cited = None
+    instagram.fact_cited = 'An invented citation'
     result = build_result(trial.case, proposal, trial.request_id, 'live', Meta())
     decision = next(d for d in result.decisions if d.task_id == 'instagram')
     assert decision.verdict == 'APPROVED' and decision.schedule_status == 'SCHEDULED'

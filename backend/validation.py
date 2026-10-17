@@ -48,3 +48,8 @@ def verify_result(case: Case, result: TrialResult) -> None:
     conflict_ids = {task_id for c in result.conflicts for task_id in c.task_ids}
     if bool(mandatory_pending) != (result.status == 'conflict') or not mandatory_pending <= conflict_ids:
         raise ValueError('Mandatory scheduling conflicts are not correctly exposed.')
+    mandatory_load = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions
+                         if tasks[d.task_id].mandatory)
+    impossible = any(c.code == 'impossible_as_filed' for c in result.conflicts)
+    if impossible != (mandatory_load > usable):
+        raise ValueError('Mandatory budget impossibility is not correctly exposed.')

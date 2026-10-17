@@ -5,6 +5,9 @@ corrections below supersede its original work-only aggregate metrics. The publis
 remain v3, so they have not been overwritten. All existing routes and legacy replay
 responses remain compatible; v4 demo arithmetic is covered separately in test_v4.py.
 
+See BUDGET_UPDATE.md for accepted case.budget_min, buffered metrics, judge-first
+verdict precedence and deterministic cuts only when the model allocation is over budget.
+
 ## Intake: POST /api/trial/init
 
 Request: `{request_id, api_version: "1", raw_text, constitution}`. Use RFC 3339

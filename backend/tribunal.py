@@ -1,7 +1,7 @@
 """Apply trusted rules to untrusted recommendations and build court orders."""
 from .schemas import (Task, Case, Decision, Persona, PlanStep, Release, Need, Recommendation,
-                       RunProposal, TrialResult, Meta, Replacement, Proposal)
-from .scheduler import plan
+                       RunProposal, TrialResult, Meta, Replacement, Proposal, Conflict)
+from .scheduler import plan, effective_budget
 from .validation import verify_result
 from .presentation import character, natural_language
 
@@ -55,9 +55,9 @@ def decide(task: Task, r: Recommendation) -> Decision:
         if task.mandatory:
             verdict, adjusted = 'APPROVED', False
             reason = 'Mandatory task protected; confirmed scope retained.'
-        elif r.fact_cited not in task.facts:
+        elif r.fact_cited is not None and r.fact_cited not in task.facts:
             verdict, adjusted = 'APPROVED', False
-            reason = 'No exact confirmed fact cited for the dismissal; confirmed scope retained.'
+            reason = 'The dismissal cited an unconfirmed fact; confirmed scope retained.'
         else:
             minutes = 0
             reason = 'Not justified for today; no time allocated. You can question this decision.'
@@ -65,9 +65,9 @@ def decide(task: Task, r: Recommendation) -> Decision:
         if not task.allow_reduction:
             verdict, adjusted = 'APPROVED', False
             reason = 'Reduction not authorised; confirmed scope retained.'
-        elif r.fact_cited not in task.facts:
+        elif r.fact_cited is not None and r.fact_cited not in task.facts:
             verdict, adjusted = 'APPROVED', False
-            reason = 'No confirmed fact cited for the reduction; confirmed scope retained.'
+            reason = 'The reduction cited an unconfirmed fact; confirmed scope retained.'
         elif r.approved_min >= task.duration_min:
             verdict, adjusted = 'APPROVED', False
             reason = 'Increases are forbidden; confirmed scope retained.'
@@ -77,7 +77,8 @@ def decide(task: Task, r: Recommendation) -> Decision:
                 verdict, adjusted = 'APPROVED', False
                 reason = 'Confirmed minimum requires the full duration.'
             else:
-                reason = f'Authorised smaller scope based on your fact: {r.fact_cited}'[:500]
+                reason = (f'Authorised smaller scope based on your fact: {r.fact_cited}'[:500]
+                          if r.fact_cited else 'The judge approved a smaller scope within your authorised minimum.')
     else:
         reason = 'Confirmed scope and duration retained.'
         if r.approved_min != task.duration_min:
@@ -106,6 +107,54 @@ def decide(task: Task, r: Recommendation) -> Decision:
         suggested_need=need)
 
 
+def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categories=None):
+    """Keep the judge's allocation unless it exceeds the confirmed calendar budget."""
+    tasks = {t.id: t for t in case.tasks}
+    by_id = {d.task_id: d for d in decisions}
+    categories = categories or {}
+    priorities = {value: i for i, value in enumerate(case.constitution.priorities)}
+    # Stable task-ID tie break; category order is the user's declared priority.
+    ordered = sorted(case.tasks, key=lambda t: (
+        -priorities.get(categories.get(t.id, t.category), len(priorities)), t.id))
+    budget = effective_budget(case)
+    def load():
+        return sum(d.approved_min + tasks[d.task_id].buffer_min
+                   for d in decisions if d.verdict != 'DISMISSED')
+    while load() > budget:
+        changed = False
+        for task in ordered:
+            if load() <= budget:
+                return
+            d = by_id[task.id]
+            if d.verdict == 'DISMISSED':
+                continue
+            if not task.facts and not task.mandatory:
+                # Do not create a missing prerequisite for a retained task.
+                if any(task.id in other.depends_on and by_id[other.id].verdict != 'DISMISSED'
+                       for other in case.tasks):
+                    continue
+                d.verdict, d.approved_min = 'DISMISSED', 0
+                d.saved_min = task.duration_min + task.buffer_min
+                d.reason = 'not_proven: No confirmed facts support allocating time to this task within the budget.'
+                d.cut_scope = ['Deferred today because the confirmed budget is exhausted.']
+                d.first_move, d.action_plan, d.done_when = None, [], None
+                d.release = Release(action='defer', note='No confirmed facts were supplied. Add evidence or request a pardon.')
+                d.schedule_status, d.pending_reason = 'NOT_APPLICABLE', None
+                changed = True
+            elif task.facts and task.allow_reduction and d.approved_min > task.minimum_min:
+                d.verdict, d.approved_min = 'REDUCED', task.minimum_min
+                d.saved_min = task.duration_min - task.minimum_min
+                d.reason = 'budget_reduction: Reduced to your confirmed minimum to fit the available budget.'
+                d.cut_scope = ['Work beyond the confirmed minimum is deferred.']
+                d.first_move, d.action_plan, d.done_when = consistent_order(
+                    [], d.approved_min, d.effective_title, None, None)
+                d.release = None
+                d.schedule_status, d.pending_reason = 'PENDING', None
+                changed = True
+        if not changed:
+            return  # Protected work remains pending; placement never exceeds budget.
+
+
 def build_result(case: Case, proposal: RunProposal | None, request_id: str, source: str,
                  meta: Meta, revision=1, appeals_used=0, decisions=None, categories=None) -> TrialResult:
     if decisions is None:
@@ -118,7 +167,16 @@ def build_result(case: Case, proposal: RunProposal | None, request_id: str, sour
             if decision.persona.name.casefold() in names:
                 decision.persona = character(task)
             names.add(decision.persona.name.casefold())
+        if proposal is not None:
+            fit_recommendations_to_budget(case, decisions, categories)
     schedule, metrics, conflicts = plan(case, decisions, categories)
+    tasks = {t.id: t for t in case.tasks}
+    mandatory_load = sum(d.approved_min + tasks[d.task_id].buffer_min
+                         for d in decisions if tasks[d.task_id].mandatory)
+    if mandatory_load > effective_budget(case):
+        conflicts.append(Conflict(code='impossible_as_filed',
+            task_ids=[t.id for t in case.tasks if t.mandatory],
+            message='Mandatory work and its buffers exceed the effective budget. Change the case or increase the budget.'))
     counts = {v:sum(d.verdict == v for d in decisions) for v in ['APPROVED','REDUCED','DISMISSED']}
     if conflicts:
         summary = f'The court found a scheduling conflict. {metrics.pending_min} approved minutes remain pending.'

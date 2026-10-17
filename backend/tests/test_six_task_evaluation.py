@@ -85,13 +85,14 @@ def test_six_task_mixed_proposals_preserve_protected_scope(six_tasks):
         rows[index].recommendation = 'DISMISSED'
         rows[index].approved_min = 0
     rows[4].fact_cited = six_tasks.tasks[4].facts[0]
+    rows[3].fact_cited = 'An invented citation'
     result = evaluate(six_tasks, RunProposal(decisions=rows))
     decisions = {d.task_id: d for d in result.decisions}
     assert result.metrics.approved_min == 240 and result.metrics.minutes_recovered == 60
     assert result.metrics.free_capacity_min == 180
     assert decisions['report'].approved_min == 60
     assert decisions['admin'].approved_min == 15
-    # No citation, mandatory status, and no reduction permission protect these tasks.
+    # An invented citation, mandatory status and no reduction permission protect these tasks.
     for task_id, minutes in [('leisure', 45), ('care', 30), ('learning', 60)]:
         assert decisions[task_id].verdict == 'APPROVED'
         assert decisions[task_id].approved_min == minutes

@@ -222,6 +222,33 @@ def test_api_accepts_budget_and_caps_fallback_placements(client, monkeypatch):
     assert result['metrics']['free_capacity_min'] == 0
 
 
+@pytest.mark.parametrize('judge_cuts,allocated', [(True, 225), (False, 215)])
+def test_api_returns_the_judge_first_budget_outcomes(client, monkeypatch, judge_cuts, allocated):
+    from backend.tests.test_budget_verdicts import chaotic_case, recommendations
+    monkeypatch.setenv('TRIAL_MODE', 'live')
+    class Provider:
+        def __init__(self, settings): pass
+        async def run(self, case):
+            proposal = recommendations(case)
+            if judge_cuts:
+                for row in proposal.decisions:
+                    if row.task_id in {'emails', 'study'}:
+                        row.recommendation = 'REDUCED'
+                        row.approved_min = 10 if row.task_id == 'emails' else 45
+                    if row.task_id == 'tiktok':
+                        row.recommendation = 'DISMISSED'; row.approved_min = 0
+            return proposal, Meta()
+    app.state.service = TrialService(provider_factory=Provider)
+    response = client.post('/api/trial/run', json=dict(request_id='chaotic-api', api_version='1',
+        confirmed=True, case=chaotic_case().model_dump(mode='json')))
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result['source'] == 'live' and result['status'] == 'ok'
+    assert result['metrics']['approved_min'] == allocated
+    assert result['metrics']['minutes_recovered'] == 335 - allocated
+    assert result['metrics']['free_capacity_min'] == 240 - allocated
+
+
 def test_pardon_restores_scope_without_using_appeal_and_is_idempotent(client):
     old = run(client)
     body = dict(**previous(old, 'pardon-1'), pardon=True)
@@ -260,7 +287,7 @@ def test_pardoned_task_stays_pending_if_calendar_is_full(client, monkeypatch):
             return from_demo(request), Meta()
     app.state.service = TrialService(provider_factory=Provider)
     body = fixture('run.request.json')
-    body['case']['constitution']['end'] = '2026-10-17T12:00:00+01:00'
+    body['case']['constitution']['end'] = '2026-10-17T11:15:00+01:00'
     body['case']['constitution']['fixed_blocks'] = []
     old = client.post('/api/trial/run', json=body).json()
     pardon = dict(**previous(old, 'pardon-full'), pardon=True)
