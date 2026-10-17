@@ -1,5 +1,7 @@
 import json
+import logging
 from dataclasses import replace
+from time import monotonic
 from pathlib import Path
 from .config import Settings
 from .errors import ApiError
@@ -13,6 +15,7 @@ from .intake import lines_for, prepare
 from .validation import verify_result
 
 FIXTURES = Path(__file__).parent / 'fixtures'
+logger = logging.getLogger('uvicorn.error.tribunal')
 
 def fixture(name):
     return json.loads((FIXTURES/name).read_text())
@@ -56,27 +59,40 @@ class TrialService:
                 session = self.store.current(request, root)
                 task = next(t.model_copy(deep=True) for t in session.case.tasks if t.id == request.task_id)
                 task.facts.extend(session.facts.get(task.id, []))
-                decision = next(d for d in session.result.decisions if d.task_id == task.id)
+                decision = next(d.model_copy(deep=True) for d in session.result.decisions if d.task_id == task.id)
                 if decision.verdict == 'DISMISSED':
                     raise ApiError('INVALID_INPUT', 'Pardon or appeal this task before requesting a plan.', ['task_id'])
-                settings = Settings.load()
-                source, order = 'fallback', None
-                if settings.mode != 'replay':
-                    try:
-                        plan_settings = replace(settings, model=settings.plan_model or settings.model)
-                        order, _meta = await self.provider_factory(plan_settings).revise(task, decision, request.instruction)
-                        if sum(s.minutes for s in order.action_plan) != decision.approved_min:
-                            raise ValueError('Revised plan changed budget.')
-                        source = 'live'
-                    except (ProviderFailure, ValueError):
-                        order = None
-                if order is None:
-                    order = RevisedOrder(first_move=decision.first_move, done_when=decision.done_when,
-                        action_plan=[DetailedStep(step=step.step, minutes=step.minutes,
-                            detail='Follow this existing approved step. A new detailed plan is unavailable.')
-                            for step in decision.action_plan])
-                result = ReviseResult(request_id=request.request_id, task_id=task.id,
-                    source=source, **order.model_dump())
+            # Inference does not mutate the trial. Do not serialize every plan
+            # request behind a slow model while holding the session lock.
+            settings = Settings.load()
+            source, order = 'fallback', None
+            started = monotonic()
+            plan_settings = replace(settings, model=settings.plan_model or settings.model)
+            if settings.mode != 'replay':
+                try:
+                    order, meta = await self.provider_factory(plan_settings).revise(task, decision, request.instruction)
+                    if sum(s.minutes for s in order.action_plan) != decision.approved_min:
+                        raise ValueError('Revised plan changed budget.')
+                    source = 'live'
+                    logger.info('revise_live model=%s calls=%s latency_ms=%s',plan_settings.model,meta.llm_calls,int((monotonic()-started)*1000))
+                except (ProviderFailure, ValueError) as exc:
+                    reason = exc.reason if isinstance(exc,ProviderFailure) else 'invalid_plan_budget'
+                    calls = exc.calls if isinstance(exc,ProviderFailure) else 0
+                    logger.warning('revise_fallback model=%s reason=%s calls=%s latency_ms=%s',plan_settings.model,reason,calls,int((monotonic()-started)*1000))
+                    order = None
+            else:
+                logger.info('revise_fallback model=%s reason=replay_mode calls=0 latency_ms=0',plan_settings.model)
+            if order is None:
+                order = RevisedOrder(first_move=decision.first_move, done_when=decision.done_when,
+                    action_plan=[DetailedStep(step=step.step, minutes=step.minutes,
+                        detail='Follow this existing approved step. A new detailed plan is unavailable.')
+                        for step in decision.action_plan])
+            result = ReviseResult(request_id=request.request_id, task_id=task.id,
+                source=source, **order.model_dump())
+            async with self.store.transaction('session:'+root):
+                # A pardon/appeal may have completed during inference. Never
+                # return or cache a plan for its now-obsolete approved budget.
+                self.store.current(request, root)
                 # v4 is a light response: no calendar mutation or revision increment.
                 return self.store.remember('revise', request, result)
 

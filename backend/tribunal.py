@@ -1,4 +1,5 @@
 """Apply trusted rules to untrusted recommendations and build court orders."""
+import re
 from .schemas import (Task, Case, Decision, Persona, PlanStep, Release, Need, Recommendation,
                        RunProposal, TrialResult, Meta, Replacement, Proposal, Conflict)
 from .scheduler import plan, effective_budget
@@ -77,8 +78,11 @@ def decide(task: Task, r: Recommendation) -> Decision:
                 verdict, adjusted = 'APPROVED', False
                 reason = 'Confirmed minimum requires the full duration.'
             else:
+                buffer_fact = r.fact_cited and re.search(
+                    r'\b(travel|commut\w*|setup|getting there|there and back|transport\w*|viaje|traslado|desplazamiento|preparación)\b',
+                    r.fact_cited, re.I)
                 reason = (f'Authorised smaller scope based on your fact: {r.fact_cited}'[:500]
-                          if r.fact_cited else 'The judge approved a smaller scope within your authorised minimum.')
+                          if r.fact_cited and not buffer_fact else 'The judge approved a smaller scope within your authorised minimum.')
     else:
         reason = 'Confirmed scope and duration retained.'
         if r.approved_min != task.duration_min:

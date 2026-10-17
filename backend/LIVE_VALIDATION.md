@@ -41,3 +41,39 @@ these observed failures in the three checks above; it is not a universal guarant
 This evidence covers five prepared tasks, not the six-task benchmark in the handoff.
 It does not establish arbitrary-task quality, frontend compatibility, or multi-user
 production readiness. The live endpoint and the rest of the demo are checked separately.
+
+## Detailed-plan timeout diagnosis and fix (17 October 2026)
+
+The reported generic court orders were labelled fallback in backend responses.
+Server logs show repeated RevisedOrder timeouts at roughly 25,002 ms; holding the
+session lock during inference made queued route times grow to 34–83 seconds.
+
+Full zai-org/GLM-5.3 also timed out in two fresh prepared-email checks after setting
+its documented reasoning_effort to low. The logs now include operation, model,
+reason, call count and latency, without credentials, provider bodies or reasoning.
+
+With the same prepared email facts and a 15-minute approved budget:
+
+| Model | Instruction/input | Observed latency | Result |
+| --- | --- | --- | --- |
+| GLM-5.3, low effort | detail | 25,002 ms | timeout/fallback |
+| GLM-5.3, low effort | Only the urgent ones | 25,002 ms | timeout/fallback |
+| Nemotron-3_5-Lightning | detail | 1,379 ms | live, valid 15-minute plan |
+| GLM-5.3-Flash, low effort | detail | 3,635 ms | live, valid 15-minute plan |
+| GLM-5.3-Flash, low effort | detail from a generic one-step plan | 4,193 ms | live, four specific steps totalling 15 |
+| GLM-5.3-Flash, low effort | Only the urgent ones from that generic plan | 3,440 ms | live, four specific steps totalling 15 |
+
+The last two results were inspected: they identify the five urgent messages, split
+the replies into concrete batches, and include detail and tips. This demonstrates
+repair of the reported prepared case, not a general model-quality benchmark.
+The fixture's existing approved scope includes snoozing non-urgent mail to Monday;
+that wording in generated plans is not a newly inferred deadline.
+
+The local plan-model setting and .env.example now select GLM-5.3-Flash; /run keeps
+Lightning. The 25-second cap remains. Inference now runs outside the session lock,
+followed by a fresh revision check before return/cache. Local concurrency tests
+cover concurrent plans and a pardon making an in-flight plan stale.
+
+Sources for the reasoning setting and available model families:
+- https://docs.z.ai/guides/llm/glm-5.3
+- https://nebius.com/services/token-factory/models/glm-models-inference

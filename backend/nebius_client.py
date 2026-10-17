@@ -26,6 +26,7 @@ class NebiusClient:
     async def generate(self, system: str, payload: dict, schema: type[T], validate=None, temperature=0.2) -> tuple[T, Meta]:
         s = self.settings
         if not s.api_key or not s.model:
+            logger.warning('provider_fallback operation=%s model=%s reason=not_configured calls=0 latency_ms=0',schema.__name__,s.model or 'unset')
             raise ProviderFailure('not_configured', model=s.model or None)
         started = monotonic()
         calls = 0
@@ -50,12 +51,18 @@ class NebiusClient:
                         # https://github.com/nebius/nebius-physical-ai/blob/main/docs/workbench/token-factory-deprecation-verification.md
                         if s.model == 'nvidia/Nemotron-3_5-Lightning':
                             body['chat_template_kwargs'] = {'enable_thinking':False}
+                        if s.model in {'zai-org/GLM-5.3', 'zai-org/GLM-5.3-Flash'}:
+                            # GLM-5.3 cannot disable thinking; use its documented low effort.
+                            body['reasoning_effort'] = 'low'
                         try:
                             calls += 1
                             attempt_started = monotonic()
                             response = await client.post(s.base_url+'/chat/completions',
                                 headers={'Authorization':'Bearer '+s.api_key}, json=body,
                                 timeout=remaining)
+                            if response.status_code >= 400:
+                                logger.warning('provider_http_error operation=%s model=%s attempt=%s status=%s latency_ms=%s',
+                                    schema.__name__,s.model,calls,response.status_code,int((monotonic()-attempt_started)*1000))
                             if response.status_code in (401,403,404):
                                 reason = f'provider_status_{response.status_code}'
                                 break
@@ -64,22 +71,22 @@ class NebiusClient:
                                 reason = 'unsupported_schema'
                                 continue
                             response.raise_for_status()
-                            logger.info('provider_response model=%s attempt=%s latency_ms=%s', s.model, calls, int((monotonic()-attempt_started)*1000))
+                            logger.info('provider_response operation=%s model=%s attempt=%s latency_ms=%s', schema.__name__,s.model,calls,int((monotonic()-attempt_started)*1000))
                             message = response.json()['choices'][0]['message']['content']
                             parsed = schema.model_validate_json(message)
                             if validate:
                                 validate(parsed)
                             meta = Meta(model=s.model, llm_calls=calls, latency_ms=int((monotonic()-started)*1000))
-                            logger.info('provider_ok model=%s calls=%s latency_ms=%s', s.model, calls, meta.latency_ms)
+                            logger.info('provider_ok operation=%s model=%s calls=%s latency_ms=%s', schema.__name__,s.model,calls,meta.latency_ms)
                             return parsed, meta
                         except (httpx.HTTPError, ValidationError, ValueError, KeyError, IndexError, TypeError) as exc:
                             reason = type(exc).__name__  # never include response body or task contents
                             fields = [('.'.join(map(str,e['loc'])), e['type']) for e in exc.errors(include_input=False)] if isinstance(exc,ValidationError) else []
-                            logger.warning('provider_retry model=%s attempt=%s reason=%s fields=%s',s.model,calls,reason,fields)
+                            logger.warning('provider_retry operation=%s model=%s attempt=%s reason=%s fields=%s',schema.__name__,s.model,calls,reason,fields)
         except TimeoutError:
             reason = 'timeout'
         elapsed = int((monotonic()-started)*1000)
-        logger.warning('provider_fallback reason=%s calls=%s latency_ms=%s', reason, calls, elapsed)
+        logger.warning('provider_fallback operation=%s model=%s reason=%s calls=%s latency_ms=%s timeout_seconds=%s',schema.__name__,s.model,reason,calls,elapsed,s.timeout_seconds)
         raise ProviderFailure(reason, calls, elapsed, s.model)
 
     async def run(self, case: Case, target_id=None, new_fact=None, replacement=None):

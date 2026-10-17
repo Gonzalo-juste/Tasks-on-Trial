@@ -41,7 +41,7 @@ class Constitution(Model):
     priorities: Annotated[list[Category], Field(max_length=7)] = []
 
 class Rules(Model):
-    mode: Literal['quick', 'immediate'] = 'quick'
+    mode: Literal['quick', 'standard', 'grand', 'immediate'] = 'quick'
     severity: Annotated[float, Field(ge=0, le=1)] = 0.5
     drama: Annotated[float, Field(ge=0, le=1)] = 0.5
 

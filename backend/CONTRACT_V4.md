@@ -102,15 +102,27 @@ provider output is retried within the existing time budget, then returns the exi
 safe plan labelled fallback. Fallback details explain that expansion is unavailable.
 
 NEBIUS_PLAN_MODEL selects the dedicated model; absent that setting, /revise uses
-NEBIUS_MODEL. Gonzalo's local setting selects zai-org/GLM-5.3, confirmed available
-by a catalog read, while /run stays on Lightning. Plan quality and latency have not
-been live-validated. Existing provider timeout/retry bounds remain in force.
+NEBIUS_MODEL. Gonzalo's local setting now selects zai-org/GLM-5.3-Flash, while /run
+stays on Lightning. Full GLM-5.3 repeatedly timed out at 25 seconds, including
+with reasoning_effort low; the Flash comparison completed successfully. See
+LIVE_VALIDATION.md for the bounded prepared-email checks. Existing provider
+timeout/retry bounds remain in force. Failure always returns source fallback,
+with model/reason/calls/latency diagnostics in server logs, never provider content.
+
+Plan inference runs outside the session lock. Before returning the result, the
+server checks that the base revision and result are still current. A concurrent
+appeal or pardon makes the in-flight plan stale and returns 409 rather than
+displaying a plan for an obsolete budget. Duplicate request IDs remain idempotent.
 
 ## Rules
 
-Optional case.rules: `{mode:"quick"|"immediate", severity:0..1, drama:0..1}`.
+Optional case.rules: `{mode:"quick"|"standard"|"grand"|"immediate", severity:0..1, drama:0..1}`.
 These settings reach the run prompt. Mode is frontend pacing only; severity/drama
 never override facts, mandatory protection, minimums or budget validation.
+
+Travel/setup facts explain buffer time; they are not cited as evidence for reducing
+work. A valid judge reduction can still use the authorised minimum, but its reason
+states that judgement instead of presenting travel as scope evidence.
 
 ## Frontend coordination still needed
 

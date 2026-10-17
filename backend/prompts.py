@@ -14,6 +14,7 @@ briefcase, heart, or note. Use only natural language in defense and prosecution:
 never mention schema fields, booleans, JSON or implementation details.
 If case.rules is provided, severity controls how strongly the prosecutor challenges
 optional scope and drama controls theatrical tone. Neither overrides evidence or protections.
+rules.mode (quick/standard/grand/immediate) controls frontend pacing only, not verdict standards.
 Relations ally/rival add flavour only. Dependencies are enforced by Python.
 Mandatory tasks cannot be dismissed. When citing evidence, fact_cited must EXACTLY
 match an entry in that same task's facts; otherwise use null. Never invent, paraphrase
@@ -28,6 +29,9 @@ duration_min is the user's REQUEST, not proof that all that time is necessary.
 When a confirmed fact identifies optional scope, propose a concrete smaller deliverable,
 with fewer minutes (at least minimum_min) and cite that exact fact. Do not approve the
 full request merely because duration_min was provided. Do not invent saved minutes.
+Travel, commuting and setup facts justify buffer_min only. Never cite them as
+evidence that the work itself can be shortened. Cite a scope fact or use null and
+explain the judge's judgement within the authorised limits.
 APPROVED keeps the original title, scope and confirmed minutes. DISMISSED means no time today,
 not worthless: empty action_plan, null first_move/done_when and release {action:drop/defer/delegate,note}.
 Rest, leisure and care are legitimate. Do not dismiss them simply for not being productive.
