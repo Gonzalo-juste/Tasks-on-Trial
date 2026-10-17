@@ -1,0 +1,28 @@
+{
+  "request_id": "demo-1",
+  "revision": 1,
+  "status": "ok",
+  "provenance": "replay",
+  "messages": [
+    { "task_id": "send", "kind": "pitch", "text": "The form closes at 15:15. Ten minutes now, or the whole day was for nothing." },
+    { "task_id": "walk", "kind": "pitch", "text": "You have been sitting all morning. Twenty minutes outside. Health is your stated priority." },
+    { "task_id": "slides", "kind": "pitch", "text": "Forty-five minutes of polish. Judges notice beautiful slides. Trust me." },
+    { "task_id": "judge", "kind": "verdict", "text": "Send: urgent and proven. Walk: matches your priority. Slides: impact not proven, and it does not fit. Dismissed for now." }
+  ],
+  "interrogation_result": null,
+  "decision": {
+    "admitted": ["send", "walk"],
+    "pending": [
+      { "task_id": "slides", "reason_code": "no_fit", "next_step": "Open the deck and fix the title slide typo." }
+    ],
+    "reason": "Deadline and stated priority win. The slides gave no evidence that 45 minutes changes the outcome."
+  },
+  "schedule": [
+    { "task_id": "send", "start": "15:00", "end": "15:10", "steps": ["Open the submission form", "Paste the repo link", "Submit"] },
+    { "task_id": "walk", "start": "15:10", "end": "15:30", "steps": ["Put on shoes", "Walk outside for 20 minutes"] }
+  ],
+  "free_min": 30,
+  "protected_min": 15,
+  "conflicts": [],
+  "meta": { "model_judge": "example-model", "model_tasks": "example-model", "llm_calls": 0, "latency_ms": 0 }
+}
