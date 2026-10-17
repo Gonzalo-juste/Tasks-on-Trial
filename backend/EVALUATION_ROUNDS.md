@@ -1,5 +1,31 @@
 # Burden-of-proof evaluation and courtroom rounds
 
+Latest product update: reduce legitimate non-leisure needs before dismissing
+them, then refill useful work that fits. Work/health/learning/family/money with
+allow_reduction=true are reduced to minimum_min before whole-task cancellation;
+health needs no invented or typed fact to be eligible. Mandatory/non-reducible
+constraints remain binding. Unsupported leisure is dismissed first and stays
+excluded from refill, preserving a merits dismissal rather than resurrecting it
+just because time remains. This supersedes the older no-facts-first policy below.
+
+Refill admits dismissed useful tasks at their confirmed minimum (full duration
+for non-reducible tasks), highest burden score first, before restoring extra
+minutes. It retries admission for dependency order. Every candidate includes its
+buffer and must allow ALL retained work to be scheduled with valid deadlines,
+commitments, dependencies, no overlaps and budget. Retained reductions are restored
+only up to their pre-Python allocation, and only if that whole former scope fits;
+valid LLM reductions are not inflated back to the original request. Spare time
+alone is not proof that a task can be placed in the calendar.
+
+APPROVED plus fewer permitted minutes is normalized to REDUCED. Normal minimum,
+permission and citation checks still apply. APPROVED plus zero/increased minutes
+does not authorize an invalid allocation. Plans and metrics are rebuilt consistently.
+
+The requested six-task target needs slides to permit shortening: fixed slides 90,
+fixed study 90, gym 30+20, run 15 and emails 10 total 255, exceeding 240. With slides
+explicitly reducible to 70 the minimum total is 235. Python does not silently unlock
+slides to force this result; the frontend must submit the intended permission/minimum.
+
 Demo reliability correction: exchanges are now OPTIONAL enrichment. Missing,
 malformed or invalid exchanges are discarded without rejecting otherwise valid
 live recommendations or triggering another provider call. The original defense

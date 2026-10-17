@@ -1,5 +1,29 @@
 # Live generation validation
 
+## Reduce-before-dismiss and refill check
+
+The latest product update was checked with the exact six requested tasks, 240
+minutes, Quick/rounds 1, email witness "Between one and five emails need a reply
+today", priorities work > health > learning > leisure, and mandatory study 90.
+
+| Slides configuration | Source / calls / latency | Allocations (work minutes) | Buffered total / recovered / pending / free |
+| --- | --- | --- | --- |
+| Current frontend: mandatory, non-reducible 90 | live / 1 / 16,895 ms | slides 90, study 90, gym dismissed, run 30, emails 30, TikTok dismissed | 240 / 125 / 0 / 0 |
+| Explicit permission: mandatory, reducible, minimum 70 | live / 1 / 14,226 ms | slides 70, study 90, gym 30 + 20 buffer, run 15, emails 10, TikTok dismissed | 235 / 130 / 0 / 5 |
+
+With slides and study locked at 90, all five useful task minima plus travel total
+255; the requested all-retained target cannot fit 240. Backend fitting does not
+silently override those input flags. The second row verifies the target when
+slides explicitly permit 70. It is an observed model result, not a guarantee that
+every future live response chooses those exact minutes.
+
+249 local tests cover minimum-first cuts, fact-free health, refill of a dismissed
+run when exactly 30 minutes are free, consistent rebuilt court orders, preservation
+of valid smaller LLM scopes, and rejection of refill candidates blocked by travel,
+deadlines, fixed-block fragmentation or dependencies. Unsupported leisure stays a
+merits dismissal and is excluded from refill; otherwise TikTok could immediately
+return whenever its 10-minute minimum fits.
+
 ## Urgent Quick-trial reliability fix
 
 Server logs after the rounds update identify round_one_mismatch as the repeated

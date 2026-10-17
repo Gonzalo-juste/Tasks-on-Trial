@@ -11,6 +11,9 @@ EVALUATION_ROUNDS.md now replaces category-only cuts with burden scoring and add
 rules.rounds plus decision.exchanges while preserving round-one speech fields.
 Exchanges are optional: invalid/missing lists do not discard usable live verdicts.
 Use defense/prosecution when exchanges is absent.
+The latest product policy reduces legitimate non-leisure needs before dismissal
+and refills useful minimums when the real calendar fits. A smaller permitted
+APPROVED allocation is normalized to REDUCED. See EVALUATION_ROUNDS.md for limits.
 
 ## Intake: POST /api/trial/init
 

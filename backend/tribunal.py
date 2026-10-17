@@ -53,6 +53,10 @@ def validate_proposal(case: Case, proposal: RunProposal):
 
 
 def decide(task: Task, r: Recommendation) -> Decision:
+    # A shorter permitted allocation is a reduction even when the model labels
+    # it APPROVED. Keep the validated minutes rather than losing useful scope.
+    if r.recommendation == 'APPROVED' and task.allow_reduction and 0 < r.approved_min < task.duration_min:
+        r = r.model_copy(update={'recommendation':'REDUCED'})
     verdict, minutes, adjusted = r.recommendation, task.duration_min, True
     if verdict == 'DISMISSED':
         if task.mandatory:
@@ -114,62 +118,119 @@ def decide(task: Task, r: Recommendation) -> Decision:
         suggested_need=need)
 
 
-def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categories=None, recommendations=None):
-    """Keep the judge's allocation unless it exceeds the confirmed calendar budget."""
-    tasks = {t.id: t for t in case.tasks}
-    by_id = {d.task_id: d for d in decisions}
-    categories = categories or {}
-    recommendations = recommendations or {}
-    scores = {t.id:burden_score(case,t,recommendations.get(t.id),categories.get(t.id)) for t in case.tasks}
-    # A completely unevidenced optional request faces dismissal before cutting
-    # work with a confirmed record. A typed deadline is itself confirmed evidence.
-    ordered = sorted(case.tasks, key=lambda t: (
-        bool(t.facts or t.deadline), scores[t.id].total, t.id))
+NEED_CATEGORIES = {'work', 'health', 'learning', 'family', 'money'}
+
+
+def allocate_work(task, decision, minutes, reason):
+    """Change one allocation and rebuild every time-dependent court-order field."""
+    decision.verdict = 'APPROVED' if minutes == task.duration_min else 'REDUCED'
+    decision.approved_min, decision.saved_min = minutes, task.duration_min-minutes
+    decision.reason = reason[:500]
+    decision.cut_scope = [] if minutes == task.duration_min else ['Scope beyond the approved time is deferred.']
+    decision.first_move, decision.action_plan, decision.done_when = consistent_order(
+        [], minutes, decision.effective_title, None, None)
+    decision.release = None
+    decision.schedule_status, decision.pending_reason = 'PENDING', None
+
+
+def refill_allocations(case, decisions, scores, ceilings, cut_ids, categories):
+    """Restore useful work only when the actual calendar can place every retained task."""
+    tasks = {t.id:t for t in case.tasks}
+    ordered = sorted(case.tasks, key=lambda t:(-scores[t.id].total,t.id))
     budget = effective_budget(case)
-    def load():
-        return sum(d.approved_min + tasks[d.task_id].buffer_min
-                   for d in decisions if d.verdict != 'DISMISSED')
-    while load() > budget:
+
+    def try_restore(task, minutes):
+        current = next(d for d in decisions if d.task_id == task.id)
+        trial = [d.model_copy(deep=True) for d in decisions]
+        candidate = next(d for d in trial if d.task_id == task.id)
+        allocate_work(task,candidate,minutes,'budget_refill: Restored within available time after higher-priority work; calendar validated.')
+        if sum(d.approved_min+tasks[d.task_id].buffer_min for d in trial if d.verdict != 'DISMISSED') > budget:
+            return False
+        plan(case,trial,categories)
+        if any(d.verdict != 'DISMISSED' and d.schedule_status != 'SCHEDULED' for d in trial):
+            return False
+        index = decisions.index(current)
+        decisions[index] = candidate
+        return True
+
+    # Admit missing useful tasks before restoring extra minutes to retained work.
+    # Revisit for dependencies: a prerequisite may be admitted later in score order.
+    for _ in case.tasks:
         changed = False
         for task in ordered:
-            if load() <= budget:
-                return
-            d = by_id[task.id]
-            if d.verdict == 'DISMISSED' or task.mandatory:
+            decision = next(d for d in decisions if d.task_id == task.id)
+            if decision.verdict != 'DISMISSED':
                 continue
-            score = scores[task.id]
-            driver = f'Lowest eligible score {score.total:g}; priority +{score.priority}, cost {score.cost:g}'
-            if not task.facts and task.deadline is None:
-                driver = f'No confirmed facts or deadline; {driver[0].lower() + driver[1:]}'
-            if score.adjustment:
-                driver += f', judge adjustment {score.adjustment:+d}: {score.adjustment_reason}'
-            if score.supporting and task.allow_reduction and d.approved_min > task.minimum_min:
-                d.verdict, d.approved_min = 'REDUCED', task.minimum_min
-                d.saved_min = task.duration_min - task.minimum_min
-                d.reason = f'budget_reduction: {driver}. Supporting evidence: {score.supporting[0][:150]}. Reduced to the confirmed minimum.'[:500]
-                d.cut_scope = ['Work beyond the confirmed minimum is deferred.']
-                d.first_move, d.action_plan, d.done_when = consistent_order(
-                    [], d.approved_min, d.effective_title, None, None)
-                d.release = None
-                d.schedule_status, d.pending_reason = 'PENDING', None
-                changed = True
-            else:
-                # Do not create a missing prerequisite for a retained task.
-                if any(task.id in other.depends_on and by_id[other.id].verdict != 'DISMISSED'
-                       for other in case.tasks):
-                    continue
-                d.verdict, d.approved_min = 'DISMISSED', 0
-                d.saved_min = task.duration_min + task.buffer_min
-                d.reason = ((f'not_proven: No supporting evidence this is needed today. {driver}.')
-                            if not score.supporting else
-                            f'budget_dismissal: {driver}. Cannot shorten further within the confirmed limits; deferred as a whole.')[:500]
-                d.cut_scope = ['Deferred today because the confirmed budget is exhausted.']
-                d.first_move, d.action_plan, d.done_when = None, [], None
-                d.release = Release(action='defer', note='Deferred to fit the budget. Add supporting evidence or request a pardon.')
-                d.schedule_status, d.pending_reason = 'NOT_APPLICABLE', None
+            category = categories.get(task.id,task.category)
+            if category == 'leisure' and not scores[task.id].supporting:
+                continue  # Unsupported leisure remains a merits dismissal.
+            minimum = task.minimum_min if task.allow_reduction else task.duration_min
+            if try_restore(task,minimum):
+                cut_ids.add(task.id)
                 changed = True
         if not changed:
-            return  # Protected work remains pending; placement never exceeds budget.
+            break
+    for task in ordered:
+        decision = next(d for d in decisions if d.task_id == task.id)
+        if task.id in cut_ids and decision.verdict == 'REDUCED' and ceilings[task.id] > decision.approved_min:
+            try_restore(task,ceilings[task.id])
+
+
+def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categories=None, recommendations=None):
+    """Reduce legitimate needs before dismissal, then refill validated free capacity."""
+    tasks = {t.id:t for t in case.tasks}
+    by_id = {d.task_id:d for d in decisions}
+    categories, recommendations = categories or {}, recommendations or {}
+    scores = {t.id:burden_score(case,t,recommendations.get(t.id),categories.get(t.id)) for t in case.tasks}
+    ceilings = {t.id:(by_id[t.id].approved_min if by_id[t.id].verdict != 'DISMISSED' else t.duration_min) for t in case.tasks}
+    cut_ids = set()
+    ordered = sorted(case.tasks,key=lambda t:(
+        not (categories.get(t.id,t.category) == 'leisure' and not scores[t.id].supporting),
+        scores[t.id].total,t.id))
+    budget = effective_budget(case)
+    def load():
+        return sum(d.approved_min+tasks[d.task_id].buffer_min for d in decisions if d.verdict != 'DISMISSED')
+    def discard(task):
+        d,score = by_id[task.id],scores[task.id]
+        if any(task.id in other.depends_on and by_id[other.id].verdict != 'DISMISSED' for other in case.tasks):
+            return False
+        category = categories.get(task.id,task.category)
+        code = 'budget_dismissal' if category in NEED_CATEGORIES or score.supporting else 'not_proven'
+        driver = ('Confirmed budget cannot fit this task alongside retained work' if code == 'budget_dismissal'
+                  else 'No supporting evidence this is needed today')
+        d.verdict,d.approved_min,d.saved_min = 'DISMISSED',0,task.duration_min+task.buffer_min
+        d.reason = f'{code}: {driver}; lowest eligible score {score.total:g}.'
+        d.cut_scope = ['Deferred today because the confirmed budget is exhausted.']
+        d.first_move,d.action_plan,d.done_when = None,[],None
+        d.release = Release(action='defer',note='Deferred to fit the budget. Add supporting evidence or request a pardon.')
+        d.schedule_status,d.pending_reason = 'NOT_APPLICABLE',None
+        cut_ids.add(task.id)
+        return True
+
+    # Unsupported leisure is the first place to recover capacity.
+    for task in ordered:
+        if load() <= budget:
+            break
+        if not task.mandatory and by_id[task.id].verdict != 'DISMISSED' and categories.get(task.id,task.category) == 'leisure' and not scores[task.id].supporting:
+            discard(task)
+    # Give every reducible legitimate need its minimum before cancelling one whole.
+    for task in ordered:
+        if load() <= budget:
+            break
+        d,score = by_id[task.id],scores[task.id]
+        category = categories.get(task.id,task.category)
+        if task.mandatory or d.verdict == 'DISMISSED' or not task.allow_reduction or d.approved_min <= task.minimum_min:
+            continue
+        if category in NEED_CATEGORIES or score.supporting:
+            driver = f'Confirmed {category} need retained at its minimum' if category in NEED_CATEGORIES else 'Supporting evidence retained at the confirmed minimum'
+            allocate_work(task,d,task.minimum_min,f'budget_reduction: {driver}; lowest eligible score {score.total:g}.')
+            cut_ids.add(task.id)
+    for task in ordered:
+        if load() <= budget:
+            break
+        if not task.mandatory and by_id[task.id].verdict != 'DISMISSED':
+            discard(task)
+    refill_allocations(case,decisions,scores,ceilings,cut_ids,categories)
 
 
 def build_result(case: Case, proposal: RunProposal | None, request_id: str, source: str,

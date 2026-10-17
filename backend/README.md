@@ -211,13 +211,14 @@ authorised reduction down to its minimum with a null citation. If a citation IS
 provided it must exactly match that task's facts; invented or borrowed citations
 still cause the proposed scope change to be rejected. Mandatory protection remains.
 
-Python keeps valid judge verdicts unless their total work plus retained buffers
-exceeds the effective budget. It first visits requests without facts or a deadline,
-then work with a confirmed record, ordered by lowest burden score within each group:
-non-mandatory tasks without supporting evidence for today are dismissed with a
-not_proven explanation; supported reducible tasks go down to their confirmed
-minimum. Non-reducible optional tasks can be dismissed as a whole. Mandatory work
-is not cut. It stops when the allocation fits and protects retained dependencies.
+Python normalizes a shorter permitted APPROVED allocation to REDUCED, preserving
+the useful model minutes. When over budget it dismisses unsupported leisure first,
+then reduces work/health/learning/family/money needs to their confirmed minima
+before cancelling whole tasks. Health eligibility does not require a typed fact.
+Mandatory work is not cut; non-reducible optional work is all-or-nothing.
+Refill restores useful dismissed minimums in highest-score order if their buffers
+and actual calendar fit, then restores former Python-cut allocations when possible.
+It does not inflate valid LLM reductions or restore unsupported leisure dismissals.
 See EVALUATION_ROUNDS.md for the current order; earlier illustrative totals are not targets.
 
 ## Six-task local evaluation

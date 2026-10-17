@@ -102,7 +102,7 @@ def test_mandatory_tasks_are_not_cut_even_when_reducible():
     assert result.decisions[0].approved_min==60 and result.status=='conflict'
 
 
-def test_no_fact_request_is_dismissed_before_reducing_evidenced_lower_score():
+def test_reducible_health_is_shortened_before_optional_whole_task_is_dropped():
     case=base_case();case.budget_min=150
     case.constitution.priorities=['work','learning','health','leisure']
     unsupported=task(id='no-proof',duration_min=60,allow_reduction=False)
@@ -111,9 +111,8 @@ def test_no_fact_request_is_dismissed_before_reducing_evidenced_lower_score():
     assert burden_score(case,supported).total < burden_score(case,unsupported).total
     result=build_result(case,RunProposal(decisions=[fallback_recommendation(t) for t in case.tasks]),
                         'no-proof-first','live',Meta())
-    assert result.decisions[0].verdict=='DISMISSED'
-    assert 'not_proven:' in result.decisions[0].reason
-    assert result.decisions[1].approved_min==120
+    assert result.decisions[0].verdict=='APPROVED'
+    assert result.decisions[1].verdict=='REDUCED' and result.decisions[1].approved_min==15
 
 
 def test_confirmed_deadline_is_evidence_even_with_empty_fact_list():
@@ -123,7 +122,9 @@ def test_confirmed_deadline_is_evidence_even_with_empty_fact_list():
     case.tasks=[deadline_task,optional]
     result=build_result(case,RunProposal(decisions=[fallback_recommendation(t) for t in case.tasks]),
                         'deadline-evidence','live',Meta())
-    assert result.decisions[0].approved_min==120 and result.decisions[1].verdict=='DISMISSED'
+    assert result.decisions[0].verdict=='REDUCED'
+    assert result.decisions[1].verdict=='APPROVED'
+    assert result.metrics.pending_min==0
 
 
 @pytest.mark.parametrize('mode,count',[('quick',1),('standard',2),('grand',3),('immediate',1)])
