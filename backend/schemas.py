@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, StrictInt, field_validator
 from .errors import ApiError
 
 Category = Literal['health', 'learning', 'work', 'money', 'family', 'leisure', 'other']
@@ -50,6 +50,13 @@ class Envelope(Model):
 class RunRequest(Envelope):
     confirmed: Literal[True]
     case: Case
+
+    @field_validator('confirmed', mode='before')
+    @classmethod
+    def explicit_confirmation(cls, value):
+        if value is not True:
+            raise ValueError('Confirmation must be the boolean true.')
+        return value
 
 class Persona(Model):
     emoji: Annotated[str, Field(min_length=1, max_length=32)] = '⚖️'

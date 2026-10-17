@@ -2,12 +2,13 @@
 from .schemas import (Task, Case, Decision, Persona, PlanStep, Release, Need, Recommendation,
                        RunProposal, TrialResult, Meta, Replacement, Proposal)
 from .scheduler import plan
+from .validation import verify_result
 
 
 def normalize_plan(steps: list[PlanStep], minutes: int, title: str) -> list[PlanStep]:
     """Preserve positive whole-minute steps and exactly conserve the time budget."""
     if not steps:
-        return [PlanStep(step=f'Work on {title}', minutes=minutes)]
+        return [PlanStep(step=f'Work on {title}'[:500], minutes=minutes)]
     steps = steps[:min(4, minutes)]
     total = sum(s.minutes for s in steps)
     # Reserve a minute per step, distribute the rest by largest remainder.
@@ -75,9 +76,9 @@ def decide(task: Task, r: Recommendation) -> Decision:
         verdict=verdict, original_min=task.duration_min, approved_min=minutes,
         saved_min=task.duration_min-minutes, effective_title=title, reason=reason,
         cut_scope=r.cut_scope if adjusted and verdict != 'APPROVED' else [],
-        first_move=None if dismissed else (useful.first_move or f'Prepare to start {title}'),
+        first_move=None if dismissed else (useful.first_move or f'Prepare to start {title}'[:500]),
         action_plan=[] if dismissed else normalize_plan(useful.action_plan, minutes, title),
-        done_when=None if dismissed else (useful.done_when or f'{title} done'),
+        done_when=None if dismissed else (useful.done_when or f'{title} done'[:500]),
         release=(r.release or Release(note='Not today. Revisit if your needs change.')) if dismissed else None,
         schedule_status='NOT_APPLICABLE' if dismissed else 'PENDING',
         suggested_need=need)
@@ -101,10 +102,12 @@ def build_result(case: Case, proposal: RunProposal | None, request_id: str, sour
     else:
         summary = (f'{counts["APPROVED"]} approved, {counts["REDUCED"]} reduced, {counts["DISMISSED"]} dismissed. '
                    f'The court returns {metrics.minutes_recovered} minutes to you.')
-    return TrialResult(request_id=request_id, revision=revision, source=source,
+    result = TrialResult(request_id=request_id, revision=revision, source=source,
         status='conflict' if conflicts else 'ok', judge_summary=summary,
         decisions=decisions, schedule=schedule, metrics=metrics, conflicts=conflicts,
         appeals_used=appeals_used, meta=meta)
+    verify_result(case,result)
+    return result
 
 
 def accepted_decision(task: Task, old: Decision, replacement: Replacement) -> Decision:
@@ -121,9 +124,9 @@ def accepted_decision(task: Task, old: Decision, replacement: Replacement) -> De
         'effective_title':replacement.title,
         'reason':'Replacement explicitly accepted by the user; confirmed minimum preserved.',
         'cut_scope':replacement.cut_scope,
-        'first_move':replacement.first_move or f'Prepare to start {replacement.title}',
+        'first_move':replacement.first_move or f'Prepare to start {replacement.title}'[:500],
         'action_plan':normalize_plan(steps, minutes, replacement.title),
-        'done_when':replacement.done_when or f'{replacement.title} done',
+        'done_when':replacement.done_when or f'{replacement.title} done'[:500],
         'release':None, 'schedule_status':'PENDING', 'pending_reason':None,
         'suggested_need':Need(need=replacement.need, status='confirmed') if replacement.need else None,
     }, deep=True)
@@ -136,6 +139,6 @@ def make_proposal(task: Task, replacement: Replacement | None) -> Proposal | Non
     return Proposal(title=replacement.title, duration_min=replacement.duration_min,
         need=replacement.need, saved_min=task.duration_min-replacement.duration_min,
         cut_scope=replacement.cut_scope,
-        first_move=replacement.first_move or f'Prepare to start {replacement.title}',
+        first_move=replacement.first_move or f'Prepare to start {replacement.title}'[:500],
         action_plan=normalize_plan(steps, replacement.duration_min, replacement.title),
-        done_when=replacement.done_when or f'{replacement.title} done')
+        done_when=replacement.done_when or f'{replacement.title} done'[:500])

@@ -19,6 +19,7 @@ def fingerprint(value) -> str:
 class Session:
     case: Case
     result: TrialResult
+    run_signature: str
     created: float = field(default_factory=monotonic)
     facts: dict[str, list[str]] = field(default_factory=dict)
 
@@ -37,6 +38,9 @@ class StateStore:
         for key in expired:
             self.sessions.pop(key, None)
         self.result_roots = {key:root for key,root in self.result_roots.items() if root in self.sessions}
+        for key, (_, _, timestamp) in list(self.cache.items()):
+            if monotonic()-timestamp > self.ttl:
+                self.cache.pop(key, None)
         while len(self.cache) > self.limit*8:
             self.cache.popitem(last=False)
 
@@ -53,7 +57,10 @@ class StateStore:
                 self.locks.pop(root, None)
 
     def cached(self, route, request):
+        self._clean()
         key = (route, request.request_id)
+        if any(saved_id == request.request_id and saved_route != route for saved_route,saved_id in self.cache):
+            raise ApiError('REQUEST_ID_CONFLICT', 'Use a fresh request_id for each distinct action.', status_code=409)
         entry = self.cache.get(key)
         if entry:
             signature, value, timestamp = entry
@@ -71,9 +78,23 @@ class StateStore:
         self._clean()
         return value
 
+    def ensure_new_result_id(self, request_id):
+        if request_id in self.result_roots:
+            raise ApiError('REQUEST_ID_CONFLICT', 'This request_id already identifies a trial result.', status_code=409)
+
+    def existing_run(self, request):
+        self._clean()
+        session = self.sessions.get(request.request_id)
+        if session:
+            if session.run_signature != fingerprint(request):
+                raise ApiError('REQUEST_ID_CONFLICT', 'This request_id already identifies a different trial.', status_code=409)
+            return session.result.model_copy(deep=True)
+        self.ensure_new_result_id(request.request_id)
+        return None
+
     def register(self, request, result):
         root = request.request_id
-        self.sessions[root] = Session(case=request.case.model_copy(deep=True), result=result.model_copy(deep=True))
+        self.sessions[root] = Session(case=request.case.model_copy(deep=True), result=result.model_copy(deep=True), run_signature=fingerprint(request))
         self.result_roots[result.request_id] = root
         self._clean()
 

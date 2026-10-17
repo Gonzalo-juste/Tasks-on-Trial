@@ -7,6 +7,7 @@ from .schemas import (RunRequest, TrialResult, InterrogateRequest, InterrogateRe
     AppealRequest, Meta, Change, Recommendation, RunProposal, validate_case)
 from .state import StateStore, fingerprint
 from .tribunal import build_result, accepted_decision, make_proposal
+from .validation import verify_result
 
 FIXTURES = Path(__file__).parent / 'fixtures'
 
@@ -26,11 +27,14 @@ class TrialService:
 
     async def run(self, request: RunRequest):
         validate_case(request.case)
-        async with self.store.transaction('run:'+request.request_id):
+        async with self.store.transaction('request:'+request.request_id):
             cached = self.store.cached('run',request)
             if cached:
                 current = self.store.sessions.get(request.request_id)
                 return current.result.model_copy(deep=True) if current else cached
+            current = self.store.existing_run(request)
+            if current:
+                return current
             settings = Settings.load()
             if settings.mode == 'replay':
                 if not demo_case_matches(request.case):
@@ -43,10 +47,15 @@ class TrialService:
                     result = build_result(request.case, proposal, request.request_id,'live', meta)
                 except ProviderFailure as exc:
                     result = build_result(request.case, None, request.request_id,'fallback', failure_meta(exc))
+            verify_result(request.case,result)
             self.store.register(request, result)
             return self.store.remember('run', request, result)
 
     async def interrogate(self, request: InterrogateRequest):
+        async with self.store.transaction('request:'+request.request_id):
+            return await self._interrogate(request)
+
+    async def _interrogate(self, request: InterrogateRequest):
         validate_case(request.case)
         if request.question_type == 'free' and not request.question_text:
             raise ApiError('INVALID_INPUT', 'A free question needs question_text.', ['question_text'])
@@ -86,6 +95,10 @@ class TrialService:
             return self.store.remember('interrogate', request, result)
 
     async def appeal(self, request: AppealRequest):
+        async with self.store.transaction('request:'+request.request_id):
+            return await self._appeal(request)
+
+    async def _appeal(self, request: AppealRequest):
         validate_case(request.case)
         root = self.store.root_for(request.previous_result)
         async with self.store.transaction('session:'+root):
@@ -98,6 +111,7 @@ class TrialService:
             if not request.accepted_replacement:
                 # No accepted scope means no change, no consumed appeal and no new revision.
                 return self.store.remember('appeal',request,session.result.model_copy(deep=True))
+            self.store.ensure_new_result_id(request.request_id)
             task = next(t for t in session.case.tasks if t.id == request.task_id)
             replacement = request.accepted_replacement
             if not task.minimum_min <= replacement.duration_min <= task.duration_min:

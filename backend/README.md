@@ -141,3 +141,18 @@ and concurrent duplicate appeals. Provider tests use mocked transports and no ne
 
 The live frontend has not yet been tested with this backend; Carlos should connect
 his typed client to port 8000 and follow the replay sequence above first.
+
+## Additional reliability checks
+
+A final independent result validator checks every court order, task duration,
+saving, pending state, calendar interval and metric before a new result is stored.
+Mandatory pending tasks must be exposed as conflicts. Maximum-length replacement
+titles also receive valid bounded fallback instructions.
+
+Request IDs must be fresh across distinct actions. A run identity is retained for
+the session even after its cached response is evicted, so reusing it cannot reset
+an appealed trial or overwrite another trial's identity.
+
+The local suite also exercises 120 seeded scheduling cases with dependency graphs,
+short windows and deadlines. No external inference is used. Public fixture shapes
+and endpoint paths are unchanged.

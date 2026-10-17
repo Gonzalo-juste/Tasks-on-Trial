@@ -102,6 +102,8 @@ def verify_schedule(case: Case, decisions: list[Decision], schedule: list[Schedu
     slots = {s.task_id:s for s in schedule}
     if len(slots) != len(schedule):
         raise ValueError('Duplicate schedule IDs.')
+    if not set(slots) <= set(by_id):
+        raise ValueError('Unknown schedule task IDs.')
     previous_end = None
     for slot in sorted(schedule, key=lambda s:s.start):
         task = next(t for t in case.tasks if t.id == slot.task_id)

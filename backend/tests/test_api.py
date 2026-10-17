@@ -215,3 +215,49 @@ def test_replay_unknown_question_never_calls_provider(client):
     r=client.post('/api/trial/interrogate',json=body)
     assert r.status_code==200 and r.json()['answer']=='No comment.'
     assert r.json()['source']=='fallback'
+
+@pytest.mark.parametrize('value',[1,'true',False,None])
+def test_confirmation_requires_literal_boolean_true(client,value):
+    body=fixture('run.request.json');body['confirmed']=value
+    response=client.post('/api/trial/run',json=body)
+    assert response.status_code==422
+    assert 'confirmed' in response.json()['error']['fields']
+
+
+def test_result_identity_survives_request_cache_eviction(client):
+    result=run(client)
+    app.state.service.store.cache.clear()
+    changed_body=fixture('run.request.json');changed_body['case']['tasks'][0]['title']='Changed'
+    assert client.post('/api/trial/run',json=changed_body).status_code==409
+    changed=client.post('/api/trial/appeal',json=appeal_body(result)).json()
+    app.state.service.store.cache.clear()
+    repeated=client.post('/api/trial/run',json=fixture('run.request.json'))
+    assert repeated.status_code==200 and repeated.json()==changed
+
+
+def test_action_id_cannot_be_reused_across_routes(client):
+    result=run(client)
+    body=appeal_body(result);body['request_id']=result['request_id']
+    r=client.post('/api/trial/appeal',json=body)
+    assert r.status_code==409 and r.json()['error']['code']=='REQUEST_ID_CONFLICT'
+    assert app.state.service.store.sessions['run-01'].result.revision==1
+
+
+def test_appeal_id_cannot_overwrite_a_second_trial(client):
+    first=run(client)
+    second_body=fixture('run.request.json');second_body['request_id']='second-run'
+    second=client.post('/api/trial/run',json=second_body).json()
+    app.state.service.store.cache.clear()
+    body=appeal_body(first);body['request_id']='second-run'
+    r=client.post('/api/trial/appeal',json=body)
+    assert r.status_code==409
+    store=app.state.service.store
+    assert store.sessions['second-run'].result.model_dump(mode='json')==second
+    assert store.sessions['run-01'].result.revision==1
+
+
+def test_expired_session_requires_new_trial(client):
+    result=run(client)
+    app.state.service.store.sessions['run-01'].created-=7201
+    r=client.post('/api/trial/appeal',json=appeal_body(result))
+    assert r.status_code==409 and r.json()['error']['code']=='REVISION_CONFLICT'
