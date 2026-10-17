@@ -10,7 +10,7 @@ import { quickCapture } from "@/lib/estimates"
 import { applyWitnessAnswer, pickWitnessQuestion } from "@/lib/witness"
 import type { Archetype, Case, Category, Task } from "@/lib/types"
 
-const chaoticDay = "Finish pitch slides 90 min due 6pm\nStudy for exam 90 min\nGym 60 min + 20 min travel\nGo for a run 60 min\nReply to emails 30 min\nScroll TikTok 45 min"
+const chaoticDay = "Finish pitch slides 90 min due 6pm\nStudy for exam 90 min\nGym 60 min + 20 min travel\nGo for a run 30 min\nReply to emails 30 min\nScroll TikTok 45 min"
 const prioritiesForDemo: Category[] = ["work", "health", "learning", "leisure", "money", "family", "other"]
 const priorityMarks: Record<Category, string> = { health: "✳", learning: "⌘", work: "▤", money: "£", family: "♡", leisure: "◌", other: "·" }
 const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }[] = [
@@ -176,7 +176,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
       ...caseData,
       budget_min: 230,
       // Slides can be trimmed to a 70-minute core: with slides and study both locked at 90 nothing else would fit.
-      tasks: demo.tasks.map((task) => task.id === "finish-pitch" ? { ...task, minimum_min: 70, allow_reduction: true } : task),
+      tasks: demo.tasks.map((task) => task.id === "finish-pitch" ? { ...task, minimum_min: 70, allow_reduction: true } : task.id === "run" ? { ...task, minimum_min: task.duration_min, allow_reduction: false } : task),
       // Lunch is a fixed commitment: the 4h budget stays discretionary, so the window grows by 30 minutes.
       constitution: { ...caseData.constitution, start, end: "17:20", fixed_blocks: [{ start: "13:00", end: "13:30", label: "Lunch" }], priorities },
     })

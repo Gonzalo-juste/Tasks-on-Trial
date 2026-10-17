@@ -42,9 +42,9 @@ function buildPact(dismissed: Decision, tasks: Task[], decisions: Decision[]): P
   const ally = decisions.find((decision) => decision.verdict !== "DISMISSED" && tasks.some((task) => task.id === decision.task_id && archetypeForTask(task) === "runner"))
   const allyTask = ally && tasks.find((task) => task.id === ally.task_id)
   if (!ally || !allyTask) return null
-  // The pact takes the gym's confirmed time (no increase): 1/3 running to the gym, 2/3 strength.
-  const minutes = gymTask.duration_min
-  const run = Math.max(5, Math.round(minutes / 3))
+  // The pact must be strictly smaller than the gym's confirmed time: 20 min running there, the rest strength.
+  const minutes = Math.max(10, gymTask.duration_min - 5)
+  const run = Math.min(20, Math.round(minutes / 3) + 1)
   return {
     allyId: ally.task_id,
     allyTitle: allyTask.title,
@@ -314,9 +314,11 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
   return <section className={`new-stage courtroom-new ${phase === "hit" && !reduceMotion ? "court-shake" : ""}`}>
     <div className="courtroom-topline"><div><span className="new-eyebrow">THE EVIDENCE IS HEARD</span><h1>The Courtroom</h1><p>Every matter gets its moment. Every minute has a witness.</p></div><div className="court-controls">{!allSeated && phase !== "verdict" && phase !== "sitting" && <button className="skip-verdict skip-one" onClick={skipTestimony}><ArrowRight /> Skip this testimony</button>}{!allSeated && <button className="skip-verdict" onClick={skip}><ArrowDown /> Skip all testimony</button>}{allSeated && onReplayAll && <button className="skip-verdict" onClick={onReplayAll}><ArrowLeft /> Replay the trial</button>}</div></div>
     <div className={`court-scene ${phase === "hit" ? "scene-objection" : ""} ${phase === "verdict" && activeDecision ? `scene-verdict scene-tone-${verdictTone[activeDecision.verdict]}` : ""}`}>
+      <div className="court-architecture" aria-hidden="true"><div className="court-coffer" /><div className="court-column court-column-left" /><div className="court-column court-column-right" /><div className="court-sconce court-sconce-left" /><div className="court-sconce court-sconce-right" /><div className="court-parquet" /></div>
       <div className="scene-curtain" aria-hidden="true" />
+      <span className="granted-budget-stamp">Budget: {courtBudget} min</span>
       <div className="scene-title"><span>IN THE MATTER OF</span><strong>YOUR DAY</strong></div>
-      <div className="judge-bench-scene"><span className="granted-budget-stamp">Budget: {courtBudget} min</span><JudgeCharacter striking={phase === "verdict"} /><div><span>JUDGE&apos;S BENCH</span><strong>{phase === "verdict" ? "Order!" : "The Honourable Day"}</strong></div></div>
+      <div className="judge-bench-scene"><JudgeCharacter striking={phase === "verdict"} /><div className="judge-nameplate"><span>JUDGE&apos;S BENCH</span><strong>{phase === "verdict" ? "Order!" : "The Honourable Day"}</strong></div></div>
       <div className="queue-area"><span className="scene-label">THE QUEUE</span>{result.decisions.map((decision, index) => {
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         if (!task) return null
@@ -464,7 +466,7 @@ function CrossExamination({ task, decision, busy, answer, onAsk, onAppeal, onClo
   pact?: Pact | null; onPact?: () => void
 }) {
   const [fact, setFact] = useState("")
-  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{QUESTIONS_BY_VERDICT[decision?.verdict ?? "APPROVED"].map((question) => <button key={question.label} disabled={busy} onClick={() => onAsk(question.type, question.text)}>{question.label}<ArrowRight /></button>)}</div>{pact && answer && <motion.div className="pact-card" initial={{ opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}><span>🤝 {pact.allyTitle.toUpperCase()} STEPS FORWARD WITH A PACT</span><strong>{pact.proposal.title}</strong><p>{pact.pitch}</p><ol>{pact.proposal.action_plan.map((step: { step: string; minutes: number }) => <li key={step.step}>{step.step} · {step.minutes} min</li>)}</ol><small>Not today: {pact.proposal.cut_scope.join(" · ")}</small><button disabled={busy} onClick={onPact}>Accept the pact — let the judge rule</button></motion.div>}{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{witnessLine(answer)}</p>{answer.proposal && <div className="cross-plea"><strong>🤝 Plea deal offered: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
+  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{QUESTIONS_BY_VERDICT[decision?.verdict ?? "APPROVED"].map((question) => <button key={question.label} disabled={busy} onClick={() => onAsk(question.type, question.text)}>{question.label}<ArrowRight /></button>)}</div>{pact && answer?.question_type === "why_today" && <motion.div className="pact-card" initial={{ opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}><span>🤝 “I CAN COME BACK TODAY — IF I PARTNER WITH {pact.allyTitle.toUpperCase()}”</span><strong>{pact.proposal.title}</strong><p>{pact.pitch}</p><ol>{pact.proposal.action_plan.map((step: { step: string; minutes: number }) => <li key={step.step}>{step.step} · {step.minutes} min</li>)}</ol><small>Not today: {pact.proposal.cut_scope.join(" · ")}</small><button disabled={busy} onClick={onPact}>🤝 Partner with {pact.allyTitle} — back to trial</button></motion.div>}{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{pact && answer.question_type === "why_today" && /^\s*no comment/i.test(answer.answer) ? `“Not on my own, Your Honour… but I can partner with ${pact.allyTitle}.”` : witnessLine(answer)}</p>{answer.proposal && <div className="cross-plea"><strong>🤝 Plea deal offered: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
 }
 
 export default function TrialExperience() {
@@ -475,7 +477,7 @@ export default function TrialExperience() {
   const [stage, setStage] = useState<"docket" | "courtroom" | "sentence">("docket")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [source, setSource] = useState("Fallback")
+  const [source, setSource] = useState("Ready")
   const [pardonIds, setPardonIds] = useState<string[]>([])
   const [crossTaskId, setCrossTaskId] = useState<string | null>(null)
   const [crossAnswer, setCrossAnswer] = useState<InterrogationResult | null>(null)
