@@ -37,7 +37,16 @@ Stage 2, "The Courtroom":
 Stage 3, "The Sentence":
 - Three columns: APPROVED (green ✓), REDUCED (amber ✂️), DISMISSED (red ✗). Each card shows
   the effective title, "original → approved" minutes (e.g. "60 → 15 min", with a strikethrough on the original),
-  the reason, a 1–3 step action plan, and a credibility meter (starts at 50%).
+  a big green "SAVED 45 MIN" badge whenever saved_min > 0 (this proves the value of REDUCED; make it prominent),
+  the reason, a "Not today" list (cut_scope, struck through), and a credibility meter (starts at 50%).
+  DISMISSED cards show the release note ("Drop", "Defer" or "Delegate") instead of a plan.
+- "COURT ORDERS" panel (the core of the product, below the columns or as a tab next to the timeline):
+  the day as an executable itinerary, in schedule order. For each scheduled task:
+  the time slot, then a highlighted "First move" line (⚡ + first_move), then the action plan as a checklist where
+  each step shows its own clock time, computed from the slot start plus the cumulative minutes
+  (e.g. "12:00–12:03 Star the five urgent emails", "12:03–12:13 Reply to each one..."), then
+  "Done when: ..." and a "Saved 45 min" chip. The checkboxes are clickable and a progress bar per task fills up.
+  Buttons: "Copy my orders" (copies the itinerary as plain text/Markdown) and "Print".
   A card can also carry a "suggested need" chip (e.g. "Need: rest · suggested").
   A PENDING task (approved but does not fit) uses a distinct icon (⏳) and the text "Approved · no slot today",
   never just a different colour.
@@ -49,7 +58,8 @@ Stage 3, "The Sentence":
   "What's your smallest version?", plus a free-text question. Max 3 questions per task (3-dot counter).
   The answer appears as the task's bubble with a rating badge: ✅ Supported / ⚠️ Evasive / ❌ Contradiction,
   and the credibility meter moves by credibility_delta.
-  If there is a proposal, show a "Plea deal" card: new title, "45 → 15 min", the need, steps,
+  If there is a proposal, show a "Plea deal" card: new title, "45 → 15 min", "Saved 30 min", the need,
+  the first move, the time-boxed plan and "Done when",
   an optional "Add a new fact" input, and the buttons "Accept plea" / "Reject".
   "Accept plea" calls appeal. Only 1 appeal per run, so disable it after use.
   After the appeal, animate the change: the card moves column (e.g. DISMISSED → REDUCED), the counter
@@ -79,9 +89,12 @@ interface Constitution { timezone: string; start: string; end: string;
   fixed_blocks: { start: string; end: string; label: string }[]; priorities: Category[] }
 interface Case { tasks: Task[]; constitution: Constitution }
 type Verdict = "APPROVED"|"REDUCED"|"DISMISSED";
+interface PlanStep { step: string; minutes: number }
 interface Decision { task_id: string; persona: { emoji: string; name: string }; defense: string; prosecution: string;
-  verdict: Verdict; original_min: number; approved_min: number; effective_title: string; reason: string;
-  action_plan: string[]; schedule_status: "SCHEDULED"|"PENDING"|"NOT_APPLICABLE";
+  verdict: Verdict; original_min: number; approved_min: number; saved_min: number; effective_title: string; reason: string;
+  cut_scope: string[]; first_move: string | null; action_plan: PlanStep[]; done_when: string | null;
+  release: { action: "drop"|"defer"|"delegate"; note: string } | null;
+  schedule_status: "SCHEDULED"|"PENDING"|"NOT_APPLICABLE";
   pending_reason: "no_fit"|"deadline"|"depends_unmet"|null;
   suggested_need: { need: string; status: "unconfirmed"|"confirmed" } | null }
 interface TrialResult { api_version: "1"; request_id: string; revision: number;
@@ -93,7 +106,8 @@ interface TrialResult { api_version: "1"; request_id: string; revision: number;
     delta_minutes_recovered: number; new_fact: string | null } | null;
   meta?: { model: string; llm_calls: number; latency_ms: number } }
 type QuestionType = "purpose"|"why_so_long"|"why_today"|"who_needs"|"minimal"|"free";
-interface Proposal { title: string; duration_min: number; need: string; steps: string[] }
+interface Proposal { title: string; duration_min: number; need: string; saved_min: number; cut_scope: string[];
+  first_move: string; action_plan: PlanStep[]; done_when: string }
 interface InterrogationResult { api_version: "1"; request_id: string; base_revision: number; source: string;
   status: "ok"; task_id: string; question_type: QuestionType; answer: string;
   rating: "supported"|"evasive"|"contradiction"; credibility_delta: number; proposal: Proposal | null }
@@ -103,9 +117,21 @@ priorities Health > Learning > Work > Leisure.
 - "Study maths" 120 min, minimum 120, MANDATORY, learning, fact "Maths exam on Monday" → APPROVED 120, 09:00–11:00.
 - "Go to the gym" 60, minimum 30, health → APPROVED 60, 11:00–12:00.
 - "Answer emails" 60, minimum 15, work, fact "Only five emails need a reply today"
-  → REDUCED 15 "Reply to the five urgent emails", 12:00–12:15.
+  → REDUCED 15 "Reply to the five urgent emails", 12:00–12:15, SAVED 45.
+  Not today: "Replying to the non-urgent emails (snooze them to Monday)", "Chasing inbox zero".
+  First move: "Search your inbox and star the five emails that need a reply today."
+  Plan: Star the five urgent emails 3 · Reply to each one in about two minutes 10 · Snooze everything else to Monday 2.
+  Done when: "Five replies sent. Nothing else."
 - "Prepare presentation" 120, minimum 90, work, facts "Presenting on Monday", "Only the core slides are essential;
-  animations are optional" → REDUCED 90 "Build the essential slides", 14:00–15:30.
+  animations are optional" → REDUCED 90 "Build the essential slides", 14:00–15:30, SAVED 30.
+  Not today: "Animations and transitions", "Visual polish beyond the core slides".
+  First move: "Write your three key messages on a sticky note."
+  Plan: Outline the three key messages 15 · Build the essential slides 60 · One run-through, out loud 15.
+  Done when: "Core slides built and rehearsed once, out loud."
+- Maths plan: Redo last week's problem sheet 60 · Review the two weakest topics 45 · Write a one-page summary of
+  your mistakes 15; first move "Open last week's problem sheet and do question 1."
+- Gym plan: Training session 45 · Stretching 15; first move "Put your trainers by the door."
+(The full mock data lives in fixtures/run.response.json, fixtures/interrogate.response.json and fixtures/appeal.response.json; mirror them exactly.)
 - "Check Instagram" 45, minimum 15, leisure, fact "I usually scroll when I am tired" → DISMISSED 0,
   suggested need "rest" (unconfirmed).
 Metrics: original 405, approved 285, recovered 120, free capacity 195.

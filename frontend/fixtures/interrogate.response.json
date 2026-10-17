@@ -13,6 +13,13 @@
     "title": "Screen-free break",
     "duration_min": 15,
     "need": "rest",
-    "steps": ["Put the phone in another room", "Walk or stretch for 15 minutes"]
+    "saved_min": 30,
+    "cut_scope": ["Scrolling"],
+    "first_move": "Put your phone in another room. Now.",
+    "action_plan": [
+      { "step": "Put the phone in another room", "minutes": 2 },
+      { "step": "Walk or stretch, no screens", "minutes": 13 }
+    ],
+    "done_when": "Fifteen minutes away from every screen."
   }
 }

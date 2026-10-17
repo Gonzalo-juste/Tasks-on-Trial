@@ -50,6 +50,23 @@ If a **mandatory** task does not fit, the response returns `status: "conflict"`.
 
 **Demo:** 405 → 285 approved = **120 recovered** (free capacity 195). After the appeal: 300 approved = **105 recovered** (free capacity 180).
 
+## 5b. Court orders: the differentiator
+*"Other planners give you a list. The court gives you orders."*
+
+The courtroom drama is the hook. **The court order is the value.** Every APPROVED or REDUCED task leaves the trial with:
+
+| Field | What it is | Example (emails) |
+|---|---|---|
+| **Saved** | `original − approved`, as a big badge on the card | **SAVED 45 MIN** (60 → 15) |
+| **Not today** (`cut_scope`) | What you are allowed to skip, and where it goes | ~~Replying to the non-urgent emails (snooze them to Monday)~~ |
+| **First move** | One physical action under 2 minutes, to beat procrastination | "Search your inbox and star the five emails that need a reply today." |
+| **Plan** | 1–4 time-boxed steps that add up exactly to the approved minutes, shown with clock times | 12:00–12:03 Star · 12:03–12:13 Reply · 12:13–12:15 Snooze the rest |
+| **Done when** | A checkable finish line, so the task cannot grow back | "Five replies sent. Nothing else." |
+
+DISMISSED tasks get a **release** instead (drop, defer or delegate, with a note).
+
+**The "Court Orders" panel** lays out the whole day as an executable itinerary, with clickable checkboxes, progress, and "Copy my orders" / "Print". Python guarantees the step minutes add up, and that Σ saved = minutes recovered.
+
 ## 6. Cross-examination (user-driven)
 When the prosecutor is done, **the user can take over the prosecution**. Click a task, then pick a question:
 
@@ -76,7 +93,7 @@ When the prosecutor is done, **the user can take over the prosecution**. Click a
 ## 8. Scope
 | Tier | What | When |
 |---|---|---|
-| **1. MVP** | Setup form, `/run` (defense + prosecution + verdicts in one call), Python planner, 3 verdict columns, minutes recovered, timeline, replay mode | **12:30 checkpoint** |
+| **1. MVP** | Setup form, `/run` (defense + prosecution + verdicts + **court orders** in one call), Python planner and plan validation, 3 verdict columns with **saved badges**, the **Court Orders panel**, minutes recovered, timeline, replay mode | **12:30 checkpoint** |
 | **2.** | `/interrogate` + `/appeal` (plea deal → appeal), suggested needs | 12:45–13:30 |
 | **3. Only if all green** | `/init` (LLM estimates durations and personas, user confirms), "Standard" mode with a separate prosecutor pass | — |
 | **Not today** | Relations −3/+3, betrayals, precedents, drag-and-drop, pardons, rule changes mid-trial, login, DB, calendar sync, generated images | — |
@@ -99,10 +116,11 @@ When the prosecutor is done, **the user can take over the prosecution**. Click a
 1. **0:00–0:20** *"What if every task had to prove it deserves your time?"* Show the list: 405 minutes, empty calendar.
 2. **0:20–0:40** Confirm the day (09:00–18:00, lunch 13:00–14:00). The user marks maths as mandatory and authorises reductions.
 3. **0:40–1:15** The trial: the emails' defense and the prosecutor's objection. *"Five urgent emails justify fifteen minutes, not an hour."*
-4. **1:15–1:45** The verdict: 2 approved, 2 reduced, 1 dismissed. **120 minutes recovered.** The timeline shows free gaps.
-5. **1:45–2:25** Cross-examine Instagram: "What are you for?" → *"I'm a break in disguise."* Accept the plea and add the new fact. The appeal makes it a screen-free break of 15 minutes, and **105 recovered**.
-6. **2:25–2:45** *"Nebius argues; Python guarantees the minutes add up."*
-7. **2:45–3:00** *"Your time is yours. Make your tasks earn it."*
+4. **1:15–1:40** The verdict: 2 approved, 2 reduced, 1 dismissed. **120 minutes recovered.** Point at the emails card: **SAVED 45 MIN**, with "Not today: non-urgent emails".
+5. **1:40–2:10** **Court orders:** open the emails order. The first move is to star five emails, then the timed steps 12:00–12:15, then "Done when: five replies sent. Nothing else." *"Other planners give you a list. The court gives you orders."*
+6. **2:10–2:40** Cross-examine Instagram: "What are you for?" → *"I'm a break in disguise."* Accept the plea, which comes with its own plan. The appeal makes it a screen-free break of 15 minutes, and **105 recovered**.
+7. **2:40–2:50** *"Nebius argues; Python guarantees the minutes add up."*
+8. **2:50–3:00** *"Your time is yours. Make your tasks earn it."*
 
 **Fallback:** a replay labelled as replay, then the video.
 

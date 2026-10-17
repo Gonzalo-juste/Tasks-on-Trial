@@ -5,6 +5,7 @@
 > 2. **New `/interrogate` route** (user cross-examination). Its `proposal` feeds `/appeal`.
 > 3. **Added fields:** `persona`, `judge_summary`, `pending_reason`, `metrics.free_capacity_min`, `credibility_delta`.
 > 4. **Timeline:** freeze at **15:30**, not 15:45.
+> 5. **Update 10:50, "court orders":** each decision now carries `saved_min`, `cut_scope`, `first_move`, a **time-boxed** `action_plan` and `done_when` (plus `release` for dismissed tasks). The action plan is our main differentiator, so see 5.1 and engine step 9.
 >
 > Product: `frontend/BRIEF.md`. Fixtures (the source of truth for shapes): `frontend/fixtures/`.
 
@@ -51,7 +52,14 @@ Decision = {
   "task_id", "persona": { "emoji", "name" },
   "defense", "prosecution",                       // <= 240 chars each
   "verdict": "APPROVED | REDUCED | DISMISSED",
-  "original_min", "approved_min", "effective_title", "reason", "action_plan": ["1-3 steps"],
+  "original_min", "approved_min",
+  "saved_min",                                    // = original_min - approved_min, computed by Python
+  "effective_title", "reason",
+  "cut_scope": ["what you are NOT doing today"],  // REDUCED/DISMISSED: the part that was cut, and where it goes
+  "first_move": "a 2-minute starter" | null,      // concrete, physical, doable right now
+  "action_plan": [{ "step": "...", "minutes": 15 }],  // 1-4 time-boxed steps; minutes MUST sum to approved_min
+  "done_when": "the finish line" | null,          // a checkable definition of done, so the task cannot grow back
+  "release": null | { "action": "drop | defer | delegate", "note": "..." },  // DISMISSED only: what to do with it
   "schedule_status": "SCHEDULED | PENDING | NOT_APPLICABLE",
   "pending_reason": null | "no_fit | deadline | depends_unmet",
   "suggested_need": null | { "need": "rest", "status": "unconfirmed | confirmed" }
@@ -75,7 +83,7 @@ TrialResult = {
 
 ### `POST /api/trial/interrogate` (tier 2)
 - **Request:** `{ "request_id", "api_version": "1", "case", "previous_result", "base_revision", "task_id", "question_type": "purpose | why_so_long | why_today | who_needs | minimal | free", "question_text": null }`
-- **Response:** `{ "api_version", "request_id", "base_revision", "source", "status": "ok", "task_id", "question_type", "answer", "rating": "supported | evasive | contradiction", "credibility_delta": -0.3..0.3, "proposal": null | { "title", "duration_min", "need", "steps" } }` (see `fixtures/interrogate.response.json`)
+- **Response:** `{ "api_version", "request_id", "base_revision", "source", "status": "ok", "task_id", "question_type", "answer", "rating": "supported | evasive | contradiction", "credibility_delta": -0.3..0.3, "proposal": null | { "title", "duration_min", "need", "saved_min", "cut_scope", "first_move", "action_plan", "done_when" } }` (see `fixtures/interrogate.response.json`). A proposal carries **its own plan**, so the user sees exactly what they are accepting.
 - **No schedule change, no new revision.** Credibility starts at 0.5 in the frontend, which adds and clamps the delta. Max 3 per task (enforced by the frontend).
 
 ### `POST /api/trial/appeal` (tier 2)
@@ -107,6 +115,14 @@ LLM-suggested durations, personas and needs, all marked unconfirmed until the us
    - `pending_min` = Σ approved minutes of PENDING tasks.
    - `free_capacity_min` = usable window (window − fixed blocks) − Σ approved minutes of SCHEDULED tasks.
 8. **Write the reasons** from templates that match the rule that was applied. The LLM text is flavour only.
+9. **Validate the action plan:**
+   - `saved_min = original_min − approved_min`, and **Σ `saved_min` must equal `minutes_recovered`**.
+   - Each step needs `minutes > 0` and there are 1–4 steps.
+   - **Σ step minutes must equal `approved_min`.** If not, rescale proportionally, round to whole minutes and let the last step absorb the remainder.
+   - APPROVED and REDUCED tasks need a non-empty `first_move`, `action_plan` and `done_when`.
+   - DISMISSED tasks have an empty plan and a `release`.
+   - If the LLM omits a plan, use the template fallback: one step, "Work on <effective_title>", with all the minutes. Its `done_when` is "<effective_title> done".
+   - The frontend derives each step's clock time from the task's schedule slot, so you send minutes, not times.
 
 **Demo check** (`fixtures/run.*`):
 
@@ -129,8 +145,15 @@ For EACH task produce:
 - persona: a playful character that fits the task (emoji + short name). British courtroom flavour welcome.
 - defense: the task argues in first person (<= 240 chars): what happens if not done today, its evidence, its minimum useful version.
 - prosecution: a sharp but FAIR objection (<= 240 chars) on need, duration or alternatives. Concede valid defenses.
-- recommendation: "APPROVED" | "REDUCED" | "DISMISSED", with approved_min, effective_title, action_plan (1-3 steps),
+- recommendation: "APPROVED" | "REDUCED" | "DISMISSED", with approved_min, effective_title,
   and fact_cited (the exact fact from `facts` that justifies a reduction or dismissal, or null).
+- THE COURT ORDER (this is the product, make it excellent):
+  - cut_scope: what the user is NOT doing today and where it goes ("snooze the rest to Monday").
+  - first_move: one physical action doable in under 2 minutes, starting with a verb ("Put your trainers by the door.").
+  - action_plan: 1-4 time-boxed steps [{"step","minutes"}] whose minutes add up EXACTLY to approved_min.
+    Steps are concrete and specific to THIS task and its facts. No generic advice ("stay focused", "take notes").
+  - done_when: a checkable finish line, so the task cannot grow back ("Five replies sent. Nothing else.").
+  - For DISMISSED: an empty plan and release {"action": "drop | defer | delegate", "note"}.
 - suggested_need: if the task looks like a means to an end (e.g. scrolling -> rest), {"need": "...", "status": "unconfirmed"}, else null.
 Then judge_summary (<= 200 chars, dry British judge tone).
 
@@ -182,6 +205,10 @@ Same as 5.1, but for one task only, with the new fact and the accepted replaceme
 6. **Appeal:** no duplicated IDs or minutes. Repeating the `request_id` adds no appeal. A stale result never overwrites a newer one.
 7. **Reduction without a cited fact:** the task stays APPROVED.
 8. **Interrogation:** a supported answer, "No comment." (evasive) and a contradiction.
+9. **Court orders:**
+   - For every non-dismissed task, the plan minutes sum to `approved_min` and Σ `saved_min` equals `minutes_recovered`.
+   - Every scheduled task has `first_move` and `done_when`.
+   - A plan with generic steps counts as a prompt bug: tune the prompt.
 
 ## 8. Git
 Work on the `backend` branch, in `backend/` only. Run `git pull origin main` before the review (13:30) and before implementing (14:30). The merge to `main` is agreed together.
