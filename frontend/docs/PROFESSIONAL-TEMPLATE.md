@@ -28,3 +28,9 @@ layout. Removing that single import restores the original visual theme.
   existing API configuration.
 
 This branch is local and has not been pushed to Carlos's shared frontend branch.
+
+## Courtroom architecture
+
+The courtroom-only `app/courtroom-realism.css` adds oak panelling, a raised judge’s bench, a brass nameplate, wall lighting, a perspective floor, and witness/prosecution rails. The budget is independent of the judge. Explicit judge/nameplate selectors prevent the old direct-child rule from positioning the artwork as a label. This is presentation only; trial timing, callbacks and API requests are unchanged.
+
+Verified with TypeScript and an isolated mock preview, including testimony and seated verdict benches. No live inference calls or backend restart were needed.

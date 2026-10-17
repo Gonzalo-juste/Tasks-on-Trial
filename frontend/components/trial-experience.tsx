@@ -266,9 +266,11 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
   return <section className={`new-stage courtroom-new ${phase === "hit" && !reduceMotion ? "court-shake" : ""}`}>
     <div className="courtroom-topline"><div><span className="new-eyebrow">THE EVIDENCE IS HEARD</span><h1>The Courtroom</h1><p>Every matter gets its moment. Every minute has a witness.</p></div><div className="court-controls">{!allSeated && phase !== "verdict" && phase !== "sitting" && <button className="skip-verdict skip-one" onClick={skipTestimony}><ArrowRight /> Skip this testimony</button>}{!allSeated && <button className="skip-verdict" onClick={skip}><ArrowDown /> Skip all testimony</button>}{allSeated && onReplayAll && <button className="skip-verdict" onClick={onReplayAll}><ArrowLeft /> Replay the trial</button>}</div></div>
     <div className={`court-scene ${phase === "hit" ? "scene-objection" : ""} ${phase === "verdict" && activeDecision ? `scene-verdict scene-tone-${verdictTone[activeDecision.verdict]}` : ""}`}>
+      <div className="court-architecture" aria-hidden="true"><div className="court-coffer" /><div className="court-column court-column-left" /><div className="court-column court-column-right" /><div className="court-sconce court-sconce-left" /><div className="court-sconce court-sconce-right" /><div className="court-parquet" /></div>
       <div className="scene-curtain" aria-hidden="true" />
+      <span className="granted-budget-stamp">Budget: {courtBudget} min</span>
       <div className="scene-title"><span>IN THE MATTER OF</span><strong>YOUR DAY</strong></div>
-      <div className="judge-bench-scene"><span className="granted-budget-stamp">Budget: {courtBudget} min</span><JudgeCharacter striking={phase === "verdict"} /><div><span>JUDGE&apos;S BENCH</span><strong>{phase === "verdict" ? "Order!" : "The Honourable Day"}</strong></div></div>
+      <div className="judge-bench-scene"><JudgeCharacter striking={phase === "verdict"} /><div className="judge-nameplate"><span>JUDGE&apos;S BENCH</span><strong>{phase === "verdict" ? "Order!" : "The Honourable Day"}</strong></div></div>
       <div className="queue-area"><span className="scene-label">THE QUEUE</span>{result.decisions.map((decision, index) => {
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         if (!task) return null
