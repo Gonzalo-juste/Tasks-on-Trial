@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { DM_Sans, Playfair_Display } from 'next/font/google'
 import './globals.css'
 import './trial-experience.css'
+import './professional-template.css'
 
 const courtSerif = Playfair_Display({ subsets: ['latin'], variable: '--font-court-serif', display: 'swap' })
 const courtSans = DM_Sans({ subsets: ['latin'], variable: '--font-court-sans', display: 'swap' })

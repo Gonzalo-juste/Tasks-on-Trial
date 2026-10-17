@@ -426,7 +426,7 @@ export default function TrialExperience() {
   const [stage, setStage] = useState<"docket" | "courtroom" | "sentence">("docket")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const [source, setSource] = useState("Fallback")
+  const [source, setSource] = useState("Ready")
   const [pardonIds, setPardonIds] = useState<string[]>([])
   const [crossTaskId, setCrossTaskId] = useState<string | null>(null)
   const [crossAnswer, setCrossAnswer] = useState<InterrogationResult | null>(null)
