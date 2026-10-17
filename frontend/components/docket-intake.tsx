@@ -13,9 +13,9 @@ const chaoticDay = "Finish pitch slides 90 min due 6pm\nStudy for exam 90 min\nG
 const prioritiesForDemo: Category[] = ["work", "learning", "health", "leisure", "money", "family", "other"]
 const priorityMarks: Record<Category, string> = { health: "✳", learning: "⌘", work: "▤", money: "£", family: "♡", leisure: "◌", other: "·" }
 const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }[] = [
-  { mode: "quick", label: "Quick trial", hint: "One round · ~25 s" },
-  { mode: "standard", label: "Standard trial", hint: "Time to read · ~45 s" },
-  { mode: "grand", label: "Grand trial", hint: "Full drama · ~70 s" },
+  { mode: "quick", label: "Quick trial", hint: "1 round · defence + objection" },
+  { mode: "standard", label: "Standard trial", hint: "2 rounds · rebuttals" },
+  { mode: "grand", label: "Grand trial", hint: "3 rounds · full drama" },
   { mode: "immediate", label: "Immediate sentence", hint: "Skip to the verdict" },
 ]
 const quickAddItems: { label: string; line: string }[] = [

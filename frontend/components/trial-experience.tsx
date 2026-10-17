@@ -132,10 +132,18 @@ function clock(value: number) {
 
 
 
-// Seconds per defendant for each trial format; phases are fractions of that slot.
-const PACE_MS: Record<Case["rules"]["mode"], number> = { immediate: 0, quick: 5200, standard: 8500, grand: 13000 }
-const PHASES: [CourtPhase, number][] = [["walking", 0], ["speaking", 0.12], ["nervous", 0.42], ["hit", 0.5], ["verdict", 0.72], ["sitting", 0.93]]
+// Every argument gets the same reading time in every format; bigger formats add rounds, not slowness.
+export const ROUNDS_BY_MODE: Record<Case["rules"]["mode"], number> = { immediate: 1, quick: 1, standard: 2, grand: 3 }
+const BEAT_MS = { walk: 700, exchange: 2600, verdict: 1900, sit: 500 }
 type CourtPhase = "walking" | "speaking" | "nervous" | "hit" | "verdict" | "sitting"
+type Exchange = NonNullable<Decision["exchanges"]>[number]
+
+/** The debate to stage: the backend's rounds when present, otherwise one round from defence and prosecution. */
+function scriptFor(decision: Decision, rounds: number): Exchange[] {
+  const given = (decision.exchanges ?? []).filter((exchange) => exchange.round <= rounds && exchange.text)
+  if (given.length) return given
+  return [{ round: 1, speaker: "defense", text: decision.defense }, { round: 1, speaker: "prosecution", text: decision.prosecution }]
+}
 
 function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPardon, onCallJudge, onAppeal, pardonsUsed, busy, replay }: {
   result: TrialResult; caseData: Case; relations: InitResult["relations"]; onSeeDay: () => void; onCrossExamine: (id: string) => void; onPardon: (id: string) => void; onCallJudge: (id: string) => void; onAppeal: (id: string) => void; pardonsUsed: number; busy: boolean
@@ -147,9 +155,12 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
   const [phase, setPhase] = useState<CourtPhase>(instant ? "sitting" : "walking")
   const [seatedIds, setSeatedIds] = useState<string[]>(() => instant ? result.decisions.map((decision) => decision.task_id) : [])
   const [menuTask, setMenuTask] = useState<string | null>(null)
+  const [exchangeIndex, setExchangeIndex] = useState(0)
+  const rounds = ROUNDS_BY_MODE[caseData.rules.mode] ?? 1
   const allSeated = activeIndex >= result.decisions.length
   const activeDecision = result.decisions[Math.min(activeIndex, result.decisions.length - 1)]
   const activeTask = caseData.tasks.find((task) => task.id === activeDecision?.task_id)
+  const currentExchange = activeDecision ? scriptFor(activeDecision, rounds)[exchangeIndex] : undefined
   const relationTasks = useMemo(() => relations.map((relation) => ({ ...relation, a: caseData.tasks.find((task) => task.id === relation.a), b: caseData.tasks.find((task) => task.id === relation.b) })).filter((relation) => relation.a && relation.b), [relations, caseData.tasks])
   const fixedMinutes = caseData.constitution.fixed_blocks.reduce((total, block) => total + Math.max(0, minutes(block.end) - minutes(block.start)), 0)
   const courtBudget = Math.max(0, minutes(caseData.constitution.end) - minutes(caseData.constitution.start) - fixedMinutes)
@@ -158,7 +169,6 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
     const everyone = result.decisions.map((decision) => decision.task_id)
     const replayIndex = replay ? result.decisions.findIndex((decision) => decision.task_id === replay.taskId) : -1
     const order = replayIndex >= 0 ? [replayIndex] : everyone.map((_, index) => index)
-    const slot = PACE_MS[caseData.rules.mode] || PACE_MS.quick
     if ((instant && replayIndex < 0) || !order.length) {
       setSeatedIds(everyone)
       setPhase("sitting")
@@ -167,17 +177,25 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
     }
     setSeatedIds(replayIndex >= 0 ? everyone.filter((id) => id !== replay?.taskId) : [])
     const timers: number[] = []
-    order.forEach((index, n) => {
-      PHASES.forEach(([name, fraction]) => timers.push(window.setTimeout(() => {
-        setActiveIndex(index)
-        setPhase(name)
-        if (name === "sitting") setSeatedIds((ids) => ids.includes(everyone[index]) ? ids : [...ids, everyone[index]])
-      }, n * slot + fraction * slot)))
+    const at = (time: number, run: () => void) => timers.push(window.setTimeout(run, time))
+    let time = 0
+    order.forEach((index) => {
+      const script = scriptFor(result.decisions[index], rounds)
+      at(time, () => { setActiveIndex(index); setExchangeIndex(0); setPhase("walking") })
+      time += BEAT_MS.walk
+      script.forEach((exchange, n) => {
+        at(time, () => { setExchangeIndex(n); setPhase(exchange.speaker === "prosecution" ? "hit" : "speaking") })
+        time += BEAT_MS.exchange
+      })
+      at(time, () => setPhase("verdict"))
+      time += BEAT_MS.verdict
+      at(time, () => { setPhase("sitting"); setSeatedIds((ids) => ids.includes(everyone[index]) ? ids : [...ids, everyone[index]]) })
+      time += BEAT_MS.sit
     })
-    timers.push(window.setTimeout(() => { setActiveIndex(result.decisions.length); setPhase("sitting") }, order.length * slot))
+    at(time, () => { setActiveIndex(result.decisions.length); setPhase("sitting") })
     return () => timers.forEach(window.clearTimeout)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caseData.rules.mode, instant, result.decisions.length, replayKey])
+  }, [caseData.rules.mode, instant, result.decisions.length, replayKey, rounds])
   const verdicts = ["APPROVED", "REDUCED", "DISMISSED"] as const
   const byVerdict = (verdict: Verdict) => result.decisions.filter((decision) => decision.verdict === verdict && seatedIds.includes(decision.task_id))
   const skip = () => { setSeatedIds(result.decisions.map((decision) => decision.task_id)); setPhase("sitting"); setActiveIndex(result.decisions.length) }
@@ -192,7 +210,7 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
         if (!task) return null
         return <motion.div key={task.id} className={`queue-defendant ${index === activeIndex && !allSeated ? "in-spotlight" : ""}`} animate={!reduceMotion && index === activeIndex && !allSeated ? { x: [0, 20, 38], y: [0, -5, 0] } : { x: 0 }} transition={{ duration: 1.1 }}><TaskCharacter archetype={decision.persona.archetype} compact state={index === activeIndex && !allSeated ? phase === "verdict" ? "speaking" : phase : "idle"} prisonerNumber={index + 1} variant="defendant" label={`${decision.effective_title}, queue`} /><span>{decision.effective_title}</span></motion.div>
       })}</div>
-      <div className="witness-spot"><span className="scene-label">THE WITNESS STAND</span><div className="witness-rail" />{activeTask && !allSeated && <motion.div className="stand-witness" key={activeTask.id} initial={reduceMotion ? false : { opacity: 0, x: -38, y: 10 }} animate={{ opacity: 1, x: 0, y: 0 }}><TaskCharacter archetype={activeDecision.persona.archetype} state={phase === "verdict" ? "speaking" : phase} prisonerNumber={activeIndex + 1} variant="defendant" label={`${activeTask.title}, ${phase}`} /><span>{activeTask.title}</span>{(phase === "speaking" || phase === "nervous") && <motion.div className="defense-bubble" initial={{ opacity: 0, scale: 0.9, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}><span>{activeDecision.persona.name.toUpperCase()} · THE DEFENCE</span><p>{activeDecision.defense}</p></motion.div>}{phase === "hit" && <motion.div className="prosecution-bubble" initial={{ opacity: 0, scale: 0.8, x: 30 }} animate={{ opacity: 1, scale: 1, x: 0 }}><span>OBJECTION! · THE PROSECUTION</span><p>{activeDecision.prosecution}</p></motion.div>}</motion.div>}
+      <div className="witness-spot"><span className="scene-label">THE WITNESS STAND</span><div className="witness-rail" />{activeTask && !allSeated && <motion.div className="stand-witness" key={activeTask.id} initial={reduceMotion ? false : { opacity: 0, x: -38, y: 10 }} animate={{ opacity: 1, x: 0, y: 0 }}><TaskCharacter archetype={activeDecision.persona.archetype} state={phase === "verdict" ? "speaking" : phase} prisonerNumber={activeIndex + 1} variant="defendant" label={`${activeTask.title}, ${phase}`} /><span>{activeTask.title}</span>{(phase === "speaking" || phase === "nervous") && currentExchange && <motion.div key={`defence-${activeIndex}-${exchangeIndex}`} className="defense-bubble" initial={{ opacity: 0, scale: 0.9, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }}><span>{rounds > 1 ? `ROUND ${currentExchange.round} OF ${rounds} · ` : ""}{activeDecision.persona.name.toUpperCase()} · {currentExchange.round > 1 ? "REBUTTAL" : "THE DEFENCE"}</span><p>{currentExchange.text}</p></motion.div>}{phase === "hit" && currentExchange && <motion.div key={`prosecution-${activeIndex}-${exchangeIndex}`} className="prosecution-bubble" initial={{ opacity: 0, scale: 0.8, x: 30 }} animate={{ opacity: 1, scale: 1, x: 0 }}><span>{rounds > 1 ? `ROUND ${currentExchange.round} OF ${rounds} · ` : ""}OBJECTION! · THE PROSECUTION</span><p>{currentExchange.text}</p></motion.div>}</motion.div>}
         {allSeated && <div className="empty-witness"><span>The room is in order.</span><span>{result.judge_summary}</span></div>}
       </div>
       <div className="prosecutor-area"><ProsecutorCharacter objecting={phase === "hit"} /><span>THE PROSECUTOR</span>{phase === "hit" && <strong>OBJECTION!</strong>}</div>

@@ -26,6 +26,8 @@ export interface Constitution {
 
 export interface Rules {
   mode: "immediate" | "quick" | "standard" | "grand"
+  /** Debate rounds per defendant: quick 1, standard 2, grand 3. */
+  rounds?: number
   severity: number
   drama: number
 }
@@ -52,6 +54,8 @@ export interface Decision {
   persona: { emoji: string; name: string; archetype: Archetype }
   defense: string
   prosecution: string
+  /** Full debate, rounds x (defence, prosecution). Optional: without it the trial shows one round. */
+  exchanges?: { round: number; speaker: "defense" | "prosecution"; text: string }[]
   verdict: Verdict
   original_min: number
   approved_min: number

@@ -70,15 +70,20 @@ function grantedBudget(caseData: Case) {
 
 // The backend rejects budget_min until it supports it; the Docket's window already encodes the budget.
 const SEND_BUDGET = process.env.NEXT_PUBLIC_SEND_BUDGET === "true"
+const SEND_ROUNDS = process.env.NEXT_PUBLIC_SEND_ROUNDS === "true"
 
 export function caseToApi(caseData: Case): Case {
   const { budget_min: _omit, ...rest } = caseData
   // The backend knows "quick" | "immediate"; standard and grand only change the frontend's pacing,
   // and a grand trial asks for more drama.
+  const { rounds: _rounds, ...baseRules } = rest.rules ?? ({} as Case["rules"])
+  const rounds = rest.rules?.mode === "grand" ? 3 : rest.rules?.mode === "standard" ? 2 : 1
   const rules = rest.rules && {
-    ...rest.rules,
+    ...baseRules,
     mode: rest.rules.mode === "immediate" ? "immediate" : "quick",
     drama: rest.rules.mode === "grand" ? Math.max(rest.rules.drama, 0.85) : rest.rules.drama,
+    // Sent only once the backend accepts it (NEXT_PUBLIC_SEND_ROUNDS=true).
+    ...(SEND_ROUNDS ? { rounds } : {}),
   }
   return {
     ...rest,
