@@ -20,7 +20,8 @@ Python keeps the original source line as the task's fact, discarding generated
 assertions and deadlines. Relative dates remain in the fact for the user to clarify;
 no scheduling deadline is fabricated. In this first version deadline is null even
 if the user supplied an explicit date; the confirmation form can supply a precise
-deadline. Explicit exam/deadline wording marks mandatory; other tasks default to
+deadline. Explicit obligation or task-deadline wording marks mandatory; an exam
+alone is context, not an obligation. Maths/studying use category learning. Other tasks default to
 reducible. Estimated fields include duration, minimum, buffer, category and flags.
 
 Questions have `{id, task_id, question, options:[{label, fact, patch}]}` and are

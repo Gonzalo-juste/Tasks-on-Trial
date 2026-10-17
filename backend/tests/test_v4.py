@@ -56,7 +56,9 @@ def test_init_fallback_has_realistic_estimates_and_echoed_constitution(client):
     tasks = result['case']['tasks']
     assert [t['duration_min'] for t in tasks] == [120, 60, 30, 120, 45]
     assert sum(t['duration_min'] for t in tasks) == 375
-    assert tasks[1]['buffer_min'] == 20 and tasks[0]['mandatory']
+    assert tasks[1]['buffer_min'] == 20 and not tasks[0]['mandatory']
+    assert tasks[0]['category'] == 'learning' and tasks[0]['allow_reduction']
+    assert tasks[0]['minimum_min'] < tasks[0]['duration_min']
     assert all(t['deadline'] is None for t in tasks)
     assert [t['facts'] for t in tasks] == [[line] for line in body['raw_text'].splitlines()]
     assert result['case']['constitution'] == body['constitution']
@@ -107,6 +109,38 @@ def test_init_live_ignores_invented_facts_and_deadlines(client, monkeypatch):
     task = result['case']['tasks'][0]
     assert task['facts'] == ["Study maths for Monday's exam"]
     assert task['deadline'] is None
+
+
+@pytest.mark.parametrize('mode', ['replay', 'live'])
+@pytest.mark.parametrize('text,mandatory', [
+    ('Maths', False),
+    ("Study maths for Monday's exam", False),
+    ('Estudiar matemáticas para el examen del lunes', False),
+    ('I must study maths for the exam', True),
+    ('Tengo que estudiar matemáticas', True),
+    ('Maths exam preparation is optional', False),
+])
+def test_exam_context_and_learning_category_override_model_errors(client, monkeypatch, mode, text, mandatory):
+    monkeypatch.setenv('TRIAL_MODE', mode)
+    class Provider:
+        def __init__(self, settings): pass
+        async def init(self, request):
+            draft = draft_for(request)
+            draft.tasks[0].category = 'other'
+            draft.tasks[0].mandatory = True
+            draft.tasks[0].minimum_min = draft.tasks[0].duration_min
+            return draft, Meta()
+    app.state.service = TrialService(provider_factory=Provider)
+    body = init_body(); body['raw_text'] = text
+    response = client.post('/api/trial/init', json=body)
+    assert response.status_code == 200, response.text
+    task = response.json()['case']['tasks'][0]
+    assert task['mandatory'] is mandatory
+    assert task['allow_reduction'] is not mandatory
+    assert task['category'] == 'learning'
+    assert task['facts'] == [text]
+    if not mandatory:
+        assert task['minimum_min'] < task['duration_min']
 
 
 @pytest.mark.parametrize('failure', ['provider', 'line', 'cycle', 'question'])

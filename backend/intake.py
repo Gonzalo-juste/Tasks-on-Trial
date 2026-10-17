@@ -18,7 +18,17 @@ def lines_for(request):
 
 
 def required(line):
-    return bool(re.search(r'\b(exam\w*|examen\w*|deadline|due|vence|vencimiento|fecha límite)\b', line, re.I))
+    # An exam supplies context; it does not express a commitment to this task.
+    if re.search(r'\b(not mandatory|not required|optional|no es obligatori[oa]|opcional)\b', line, re.I):
+        return False
+    return bool(re.search(r'\b(must|required|mandatory|have to|debo|tengo que|obligatori[oa]|deadline|due|vence|vencimiento|fecha límite)\b', line, re.I))
+
+
+def learning_task(line):
+    # Keep communication tasks about maths in their own category.
+    if re.match(r'\s*(email|answer|reply|send|enviar|responder|correo)\b', line, re.I):
+        return False
+    return bool(re.search(r'\b(maths?|mathematics|matemáticas|study|studying|estudiar|estudiando|repasar|examen|exam)\b', line, re.I))
 
 
 def explicit_duration(line):
@@ -36,8 +46,8 @@ def fallback_tasks(lines):
     for index, line in enumerate(lines):
         lower = line.casefold()
         duration, minimum, buffer, category = 30, 15, 0, 'other'
-        if any(word in lower for word in ['math', 'exam', 'study', 'estudi', 'examen']):
-            duration, minimum, category = 120, 120, 'learning'
+        if learning_task(line):
+            duration, minimum, category = 120, 45, 'learning'
         elif any(word in lower for word in ['gym', 'gimnas']):
             duration, minimum, buffer, category = 60, 30, 20, 'health'
         elif any(word in lower for word in ['email', 'correo']):
@@ -96,8 +106,12 @@ def prepare(request, draft=None):
                 task.duration_min = duration
                 task.minimum_min = min(task.minimum_min, duration)
             task.deadline = None  # Relative dates need user confirmation before scheduling.
+            if learning_task(row.source_line):
+                task.category = 'learning'
             task.mandatory = required(row.source_line)
             task.allow_reduction = not task.mandatory
+            if learning_task(row.source_line) and not task.mandatory and row.mandatory and task.minimum_min == task.duration_min:
+                task.minimum_min = min(task.minimum_min, fallback_tasks([row.source_line])[0].minimum_min)
             if task.mandatory:
                 task.minimum_min = task.duration_min
             tasks.append(task)
