@@ -310,7 +310,7 @@ function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onR
       })}</section>
       <div className="done-when-card"><span>DONE WHEN</span><p>{doneWhen}</p></div>
       <div className="mark-done-row">{doneMinutes !== null ? <span className="done-confirmation"><Check /> Done · took {doneMinutes} min</span> : showDuration ? <div className="actual-duration"><label htmlFor="actual-duration">How long did it really take?</label><input id="actual-duration" type="number" min="1" value={actual} onChange={(event) => setActual(event.target.value)} placeholder="Minutes" /><button onClick={() => { if (Number(actual) > 0) { setDoneMinutes(Number(actual)); setShowDuration(false) } }} disabled={Number(actual) <= 0}>Save actual</button></div> : <button className="mark-done-button" onClick={() => setShowDuration(true)}><Check /> Mark done</button>}</div>
-      <section className="call-judge-panel"><div className="judge-panel-head"><JudgeCharacter /><div><span className="new-eyebrow">CALL THE JUDGE</span><h3>Need a different order?</h3><p>Ask for a rewrite that fits real life.</p></div></div><div className="judge-presets">{presetsForTask.map((preset) => <button key={preset} className={lastAsked === preset ? "preset-asked" : ""} disabled={busy} onClick={() => submitRevision(preset)}>{preset}</button>)}</div><form className="judge-instruction" onSubmit={(event) => { event.preventDefault(); submitRevision() }}><input value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Or tell the judge what needs to change…" /><button disabled={!instruction.trim() || busy} aria-label="Send instruction"><Send /></button></form>{busy && <div className="judge-loading" role="status"><JudgeCharacter striking /><span>The judge is rewriting your order…</span></div>}{error && !busy && <p className="revision-error" role="alert">{error}</p>}{revision && !busy && !error && <p className="revision-success"><Check /> {lastAsked ? `Revised: “${lastAsked}”. The plan above is updated.` : "The detailed order is in."}</p>}</section>
+      <section className="call-judge-panel"><div className="judge-panel-head"><JudgeCharacter /><div><span className="new-eyebrow">CALL THE JUDGE</span><h3>Need a different order?</h3><p>Ask for a rewrite that fits real life.</p></div></div><div className="judge-presets">{presetsForTask.map((preset) => <button key={preset} className={lastAsked === preset ? "preset-asked" : ""} onClick={() => submitRevision(preset)}>{preset}</button>)}</div><form className="judge-instruction" onSubmit={(event) => { event.preventDefault(); submitRevision() }}><input value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Or tell the judge what needs to change…" /><button disabled={!instruction.trim()} aria-label="Send instruction"><Send /></button></form>{busy && <div className="judge-loading" role="status"><JudgeCharacter striking /><span>The judge is rewriting your order…</span></div>}{error && !busy && <p className="revision-error" role="alert">{error}</p>}{revision && !busy && !error && <p className="revision-success"><Check /> {lastAsked ? `Revised: “${lastAsked}”. The plan above is updated.` : "The detailed order is in."}</p>}</section>
       <button className="order-cross-examine" onClick={onCrossExamine}>Cross-examine this task</button>
     </div>
   </motion.aside></div>
@@ -403,18 +403,33 @@ export default function TrialExperience() {
     requestedRevision.current = null
     setStage("sentence")
   }
+  // The judge has its own loading state so the order's buttons never lock; the latest request wins.
+  const [reviseBusy, setReviseBusy] = useState(false)
+  const [reviseError, setReviseError] = useState("")
+  const reviseTicket = useRef(0)
+  const askJudge = async (taskId: string, instruction: string) => {
+    if (!result) return
+    const ticket = ++reviseTicket.current
+    setReviseBusy(true)
+    setReviseError("")
+    try {
+      const response = await revise({ case: caseData, task_id: taskId, instruction, previous_result: result, base_revision: result.revision })
+      if (ticket === reviseTicket.current) setRevision(response)
+    } catch (cause) {
+      if (ticket === reviseTicket.current) setReviseError(cause instanceof Error ? cause.message : "The judge could not revise this order.")
+    } finally {
+      if (ticket === reviseTicket.current) setReviseBusy(false)
+    }
+  }
   useEffect(() => {
     if (!orderTaskId || !result || requestedRevision.current === orderTaskId) return
     requestedRevision.current = orderTaskId
-    setBusy(true)
-    revise({ case: caseData, task_id: orderTaskId, instruction: "detail", previous_result: result, base_revision: result.revision }).then(setRevision).catch((cause) => setError(cause instanceof Error ? cause.message : "The judge could not expand this order.")).finally(() => setBusy(false))
-  }, [orderTaskId, result, caseData])
+    void askJudge(orderTaskId, "detail")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderTaskId, result])
   const reviseOrder = async (instruction: string) => {
-    if (!orderTaskId || !result) return
-    setBusy(true)
-    try { setRevision(await revise({ case: caseData, task_id: orderTaskId, instruction, previous_result: result, base_revision: result.revision })) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "The judge could not revise this order.") }
-    finally { setBusy(false) }
+    if (!orderTaskId) return
+    await askJudge(orderTaskId, instruction)
   }
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: "auto" }) }, [stage])
@@ -425,6 +440,6 @@ export default function TrialExperience() {
       <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom result={result} caseData={caseData} relations={initData?.relations ?? []} onSeeDay={() => setStage("sentence")} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} pardonIds={pardonIds} /></motion.div>}</AnimatePresence>
     </main><footer className="new-footer"><span>THE COURT OF A REASONABLE DAY</span><span>Nothing earns time by default.</span></footer>
     {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} />}
-    {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={busy} error={error} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} />}
+    {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} />}
   </div>
 }

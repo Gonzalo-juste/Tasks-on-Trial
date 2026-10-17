@@ -49,3 +49,7 @@
 .judge-presets button.preset-asked{color:#fffaf0;background:#1f3442}
 .revision-error{margin-top:8px;padding:8px 10px;color:#8a2a22;border:1px solid #e3a59c;border-radius:4px;background:#fff1ee;font-size:12px}
 @media(max-width:700px){.defense-bubble,.prosecution-bubble{width:62vw;top:-112px;font-size:11px}.prosecution-bubble{right:-20%}.verdict-overlay{padding:14px}.verdict-overlay span{font-size:12px}}
+.witness-about{display:flex;align-items:center;gap:10px;margin:6px 0 4px;padding:6px 10px;border:1px solid #e2d2ad;border-radius:6px;background:#fffaf0}
+.witness-about .docket-character{width:42px;min-width:42px;height:46px}
+.witness-about span{display:flex;flex-direction:column;color:#8a7650;font-size:10px;font-weight:800;letter-spacing:.12em}
+.witness-about strong{color:#1f3442;font:600 16px var(--font-court-serif),Georgia,serif;letter-spacing:0}
