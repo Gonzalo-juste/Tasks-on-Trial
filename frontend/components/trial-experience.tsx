@@ -33,28 +33,40 @@ const QUESTIONS_BY_VERDICT: Record<Verdict, { label: string; type: QuestionType;
   ],
 }
 /** Two compatible tasks join forces: a dismissed task folds into an ally that the court kept. */
-interface Pact { allyId: string; allyTitle: string; pitch: string; proposal: Proposal }
+interface Pact { allyId: string; allyTitle: string; targetId: string; mergeId: string; pitch: string; proposal: Proposal }
 
+/**
+ * Gym and run are compatible: whichever was dismissed can partner with the one the court kept.
+ * The pact is always filed on the gym (its 60 minutes leave room for a strictly smaller combined session)
+ * and the run is merged into it: running to the gym replaces the commute.
+ */
 function buildPact(dismissed: Decision, tasks: Task[], decisions: Decision[]): Pact | null {
   if (dismissed.verdict !== "DISMISSED") return null
-  const gymTask = tasks.find((task) => task.id === dismissed.task_id)
-  if (!gymTask || archetypeForTask(gymTask) !== "dumbbell") return null
-  const ally = decisions.find((decision) => decision.verdict !== "DISMISSED" && tasks.some((task) => task.id === decision.task_id && archetypeForTask(task) === "runner"))
-  const allyTask = ally && tasks.find((task) => task.id === ally.task_id)
-  if (!ally || !allyTask) return null
-  // The pact must be strictly smaller than the gym's confirmed time: 20 min running there, the rest strength.
+  const kindOf = (id: string) => { const task = tasks.find((item) => item.id === id); return task ? archetypeForTask(task) : null }
+  const dismissedKind = kindOf(dismissed.task_id)
+  if (dismissedKind !== "dumbbell" && dismissedKind !== "runner") return null
+  const partnerKind = dismissedKind === "dumbbell" ? "runner" : "dumbbell"
+  const ally = decisions.find((decision) => decision.verdict !== "DISMISSED" && !decision.merged_into && kindOf(decision.task_id) === partnerKind)
+  if (!ally) return null
+  const gymTask = tasks.find((task) => task.id === (dismissedKind === "dumbbell" ? dismissed.task_id : ally.task_id))
+  const runTask = tasks.find((task) => task.id === (dismissedKind === "runner" ? dismissed.task_id : ally.task_id))
+  const allyTask = tasks.find((task) => task.id === ally.task_id)
+  if (!gymTask || !runTask || !allyTask) return null
   const minutes = Math.max(10, gymTask.duration_min - 5)
   const run = Math.min(20, Math.round(minutes / 3) + 1)
+  const commute = gymTask.buffer_min || 20
   return {
     allyId: ally.task_id,
     allyTitle: allyTask.title,
-    pitch: `"We're both here for your health. Let me run you to the gym: the run replaces the ${gymTask.buffer_min || 20}-minute commute, and you still train. Two tasks, one ${minutes}-minute session."`,
+    targetId: gymTask.id,
+    mergeId: runTask.id,
+    pitch: `"We're both here for your health. Run to the gym: the run replaces the ${commute}-minute commute, and you still train. Two tasks, one ${minutes}-minute session."`,
     proposal: {
       title: "Run to the gym + strength circuit",
       duration_min: minutes,
       need: "health",
       saved_min: 0,
-      cut_scope: [`The ${gymTask.buffer_min || 20}-minute commute (you run there instead)`, "A separate gym session"],
+      cut_scope: [`The ${commute}-minute commute (you run there instead)`, "A separate run"],
       first_move: "Put on your running shoes and head for the gym.",
       action_plan: [{ step: "Run to the gym", minutes: run }, { step: "Strength circuit at the gym", minutes: minutes - run }],
       done_when: "You ran there and finished the circuit.",
@@ -232,13 +244,14 @@ function scriptFor(decision: Decision, rounds: number): Exchange[] {
   return script
 }
 
-function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPardon, onCallJudge, onAppeal, pardonsUsed, busy, replay, startSeated, onPlayed, onReplayAll }: {
+function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPardon, onCallJudge, onAppeal, pardonsUsed, busy, replay, startSeated, onPlayed, onReplayAll, alliance }: {
   result: TrialResult; caseData: Case; relations: InitResult["relations"]; onSeeDay: () => void; onCrossExamine: (id: string) => void; onPardon: (id: string) => void; onCallJudge: (id: string) => void; onAppeal: (id: string) => void; pardonsUsed: number; busy: boolean
   replay?: { taskId: string; key: number } | null
   /** The trial was already staged for this result: come back seated instead of replaying everything. */
   startSeated?: boolean
   onPlayed?: () => void
   onReplayAll?: () => void
+  alliance?: string | null
 }) {
   const reduceMotion = useReducedMotion()
   const startSeatedRef = useRef(Boolean(startSeated) && !replay)
@@ -316,6 +329,7 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
     <div className={`court-scene ${phase === "hit" ? "scene-objection" : ""} ${phase === "verdict" && activeDecision ? `scene-verdict scene-tone-${verdictTone[activeDecision.verdict]}` : ""}`}>
       <div className="court-architecture" aria-hidden="true"><div className="court-coffer" /><div className="court-column court-column-left" /><div className="court-column court-column-right" /><div className="court-sconce court-sconce-left" /><div className="court-sconce court-sconce-right" /><div className="court-parquet" /></div>
       <div className="scene-curtain" aria-hidden="true" />
+      <AnimatePresence>{alliance && <motion.div className="alliance-banner" initial={{ opacity: 0, y: -12, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 16 }}><span>💞</span>{alliance}</motion.div>}</AnimatePresence>
       <span className="granted-budget-stamp">Budget: {courtBudget} min</span>
       <div className="scene-title"><span>IN THE MATTER OF</span><strong>YOUR DAY</strong></div>
       <div className="judge-bench-scene"><JudgeCharacter striking={phase === "verdict"} /><div className="judge-nameplate"><span>JUDGE&apos;S BENCH</span><strong>{phase === "verdict" ? "Order!" : "The Honourable Day"}</strong></div></div>
@@ -521,6 +535,8 @@ export default function TrialExperience() {
       const response = updateMockResult(rawResult, currentCase)
       setResult(response)
       setReplay(null)
+      setAlliance(null)
+      setMergedInto({})
       setSource(response.source === "live" ? "Live" : response.source === "replay" ? "Replay" : "Fallback")
       setStage("courtroom")
     } catch (cause) {
@@ -590,6 +606,8 @@ export default function TrialExperience() {
   }
   // Dismissed task id -> the ally it merged into through a pact (display only; the backend judged the ally's appeal).
   const [mergedInto, setMergedInto] = useState<Record<string, string>>({})
+  // Shown in the courtroom once two tasks have made a pact: their relationship improved.
+  const [alliance, setAlliance] = useState<string | null>(null)
   const pactFor = (taskId: string | null) => {
     const decision = result?.decisions.find((item) => item.task_id === taskId)
     return decision && !mergedInto[decision.task_id] ? buildPact(decision, caseData.tasks, result?.decisions ?? []) : null
@@ -605,9 +623,9 @@ export default function TrialExperience() {
     try {
       // The dismissed task takes the pact; its ally is merged into it and the commute buffer goes to zero.
       const send = (proposal: Proposal) => appeal({
-        case: trialCase(), task_id: taskId,
+        case: trialCase(), task_id: pact.targetId,
         new_fact: `${gymTitle} and ${pact.allyTitle} agreed a pact: running to the gym replaces the commute, so both are served in one session.`,
-        accepted_replacement: { ...proposal, buffer_min: 0 }, merge_task_ids: [pact.allyId],
+        accepted_replacement: { ...proposal, buffer_min: 0 }, merge_task_ids: [pact.mergeId],
         previous_result: result, base_revision: result.revision,
       })
       let updated: TrialResult
@@ -621,8 +639,9 @@ export default function TrialExperience() {
         updated = await send({ ...pact.proposal, duration_min: minutes, action_plan: [{ step: "Run to the gym", minutes: run }, { step: "Strength circuit at the gym", minutes: minutes - run }] })
       }
       setResult(updated)
-      setMergedInto((current) => ({ ...current, [taskId]: pact.allyId, [pact.allyId]: taskId }))
-      setReplay({ taskId, key: Date.now() })
+      setMergedInto((current) => ({ ...current, [pact.mergeId]: pact.targetId }))
+      setAlliance(`${caseData.tasks.find((task) => task.id === pact.targetId)?.title ?? "Gym"} + ${caseData.tasks.find((task) => task.id === pact.mergeId)?.title ?? "Run"} are now allies: one session, no commute`)
+      setReplay({ taskId: pact.targetId, key: Date.now() })
       setSeenTrialId(updated.request_id)
       setStage("courtroom")
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The court could not hear the pact.") }
@@ -693,7 +712,7 @@ export default function TrialExperience() {
     <header className="new-court-header"><a className="new-brand" href="#top"><span className="new-brand-mark"><Gavel /></span><span><strong>Tasks on Trial</strong><small>The calendar starts empty. Your tasks must earn their place.</small></span></a><div className="header-recovered"><span>TIME RECOVERED</span><strong>{result?.metrics.minutes_recovered ?? 0}<small> MIN</small></strong></div><span className={`new-source-pill ${source.toLowerCase()}`}><i /> {source}</span></header>
     <main className="new-main" id="top"><nav className="new-stepper" aria-label="Trial stages">{(["docket", "courtroom", "sentence"] as const).map((step, index) => <button key={step} className={`${stage === step ? "active" : ""} ${index < (["docket", "courtroom", "sentence"].indexOf(stage)) ? "complete" : ""}`} onClick={() => { if (step === "docket") setStage("docket"); else if (result) setStage(step) }} disabled={step !== "docket" && !result}><span>{index + 1}</span>{step === "docket" ? "Docket" : step === "courtroom" ? "Courtroom" : "Sentence"}</button>)}</nav>
       {error && <div className="court-error global-error" role="alert"><span>{error}</span>{/restarted/i.test(error) && <button onClick={() => void reconvene()}>Reconvene the court</button>}<button onClick={() => setError("")}>Dismiss</button></div>}
-      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} onStart={startFocus} pardonIds={pardonIds} activeTaskId={activeTaskId} /></motion.div>}</AnimatePresence>
+      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} alliance={alliance} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} onStart={startFocus} pardonIds={pardonIds} activeTaskId={activeTaskId} /></motion.div>}</AnimatePresence>
     </main><footer className="new-footer"><span>THE COURT OF A REASONABLE DAY</span><span>Nothing earns time by default.</span></footer>
     {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} pact={pactFor(crossTaskId)} onPact={() => void acceptPact(crossTaskId)} />}
     {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} onStart={() => { setOrderTaskId(null); startFocus(orderTask.id) }} />}

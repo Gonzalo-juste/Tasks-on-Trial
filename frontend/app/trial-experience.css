@@ -216,3 +216,5 @@
 .focus-window button.active{color:#fffaf0;border-color:#1f3442;background:#1f3442;box-shadow:0 0 0 3px #c9a45c55}
 .focus-window button.active small{color:#e8d7a8}
 .focus-window p{width:100%;margin:0;color:#7a7468;font-size:11px}
+.alliance-banner{position:absolute;top:54px;left:50%;z-index:11;display:flex;align-items:center;gap:8px;padding:7px 14px;color:#1f2f38;border:2px solid #3f9bd1;border-radius:20px;background:#eef7fd;box-shadow:0 6px 18px #0006;font-size:13px;font-weight:800;white-space:nowrap;translate:-50% 0}
+.alliance-banner span{font-size:16px;animation:now-pulse 1.6s ease-in-out infinite}
