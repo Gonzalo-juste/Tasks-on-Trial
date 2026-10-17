@@ -1,0 +1,334 @@
+/* Presentation layer only. Remove its layout import to restore the original theme. */
+.trial-experience {
+  --ink: #253c43;
+  --navy: #17363d;
+  --paper: #fffefa;
+  --cream: #f4f2eb;
+  --brass: #a47c42;
+  --green: #356650;
+  --red: #a34b43;
+  --amber: #89652d;
+  --template-line: #dedfd5;
+  --template-muted: #69766f;
+  min-height: 100vh;
+  background: #f4f2eb;
+  color: var(--ink);
+  font-family: var(--font-court-sans), Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.trial-experience button,
+.trial-experience input,
+.trial-experience textarea { font-family: inherit; }
+.trial-experience :is(button, a, input, textarea, summary):focus-visible {
+  outline: 3px solid #a47c42;
+  outline-offset: 4px;
+}
+.trial-experience button { transition: background-color .18s, border-color .18s, box-shadow .18s, transform .18s; }
+.trial-experience .new-court-header {
+  min-height: 98px;
+  padding: 18px max(28px, calc((100vw - 1280px) / 2));
+  gap: 28px;
+  background: #17363d;
+  border-bottom: 1px solid #b99961;
+}
+.trial-experience .new-brand-mark { width: 48px; height: 48px; border-radius: 12px; color: #dcc394; border-color: #dcc39466; }
+.trial-experience .new-brand-mark svg { width: 23px; }
+.trial-experience .new-brand strong { font-size: 26px; letter-spacing: -.025em; }
+.trial-experience .new-brand small { max-width: 370px; margin-top: 7px; font-size: 12px; line-height: 1.4; color: #e5ece0b3; }
+.trial-experience .header-recovered { min-width: 150px; padding: 2px 28px; border-color: #dde4d833; }
+.trial-experience .header-recovered span { font-size: 10px; letter-spacing: .13em; }
+.trial-experience .header-recovered strong { margin-top: 4px; font-size: 36px; }
+.trial-experience .header-recovered small { padding-left: 5px; font-size: 11px; }
+.trial-experience .new-source-pill { padding: 8px 12px; font-size: 12px; border: 1px solid #e1e9db33; border-radius: 30px; }
+.trial-experience .new-main { width: min(1344px, 100%); padding: 30px 32px 72px; }
+.trial-experience .new-stepper { margin: 0 0 38px; padding: 5px; gap: 6px; background: #faf9f4; border-color: var(--template-line); border-radius: 10px; box-shadow: none; }
+.trial-experience .new-stepper button { min-width: 152px; padding: 10px 18px; border-radius: 6px; font-size: 13px; gap: 10px; text-transform: none; }
+.trial-experience .new-stepper button span { width: 23px; height: 23px; font-size: 11px; }
+.trial-experience .new-stepper button.active { background: #17363d; }
+.trial-experience .new-stepper button:disabled { opacity: .55; }
+.trial-experience .new-eyebrow { font-size: 10px; font-weight: 750; letter-spacing: .16em; line-height: 1.6; color: #866b43; }
+.trial-experience .new-stage-heading,
+.trial-experience .courtroom-topline { margin-bottom: 30px; }
+.trial-experience .budget-docket-heading {
+  min-height: 0;
+  padding: 10px 0 35px;
+  border: 0;
+  border-bottom: 1px solid #d5d8cc;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.trial-experience .budget-docket-heading::before,
+.trial-experience .budget-docket-heading::after { display: none; }
+.trial-experience .budget-docket-heading h1 { margin: 14px 0 18px; max-width: 900px; font-size: clamp(44px, 5.8vw, 76px); line-height: 1.06; letter-spacing: -.055em; color: #17363d; }
+.trial-experience .budget-docket-heading h1 em { color: #81724d; }
+.trial-experience .budget-docket-heading p,
+.trial-experience .courtroom-topline p { font-size: 15px; line-height: 1.6; color: #637169; }
+.trial-experience .budget-docket-heading .new-eyebrow { color: #866b43; }
+.trial-experience .budget-docket-heading .docket-seal {
+  width: 106px; height: 116px; flex: 0 0 auto;
+  margin: 0 8px 4px 20px;
+  transform: none;
+  border: 1px solid #c8c9b9;
+  border-radius: 4px 4px 36px 36px;
+  background: #ebece2;
+  color: #64705a;
+  font-size: 10px;
+}
+.trial-experience .docket-stage-grid { grid-template-columns: minmax(0, 1fr) 360px; gap: 26px; }
+.trial-experience .docket-stage-main { min-width: 0; }
+.trial-experience .docket-stage-scale { position: sticky; top: 24px; }
+.trial-experience .docket-paper,
+.trial-experience .timeline-new,
+.trial-experience .day-tiles {
+  padding: 26px;
+  border: 1px solid var(--template-line);
+  border-radius: 12px;
+  background: #fffefa;
+  box-shadow: 0 4px 16px #19362c04;
+}
+.trial-experience .budget-first-panel { border-top: 3px solid #a48b5c; }
+.trial-experience .budget-first-top { gap: 18px; }
+.trial-experience .budget-first-top h2 { margin-top: 7px; max-width: 440px; font-size: 25px; line-height: 1.25; letter-spacing: -.025em; }
+.trial-experience .available-time-label { font-size: 10px; letter-spacing: .06em; color: #6b776c; }
+.trial-experience .available-time-label span { font-size: 35px; color: #17363d; }
+.trial-experience .budget-controls-row { gap: 16px; margin-top: 22px; }
+.trial-experience .budget-presets { gap: 8px; }
+.trial-experience .budget-preset { min-width: 68px; min-height: 49px; padding: 8px 16px; border: 1px solid #d9ddd2; border-radius: 7px; background: #f8f9f4; font-size: 15px; }
+.trial-experience .budget-preset small { position: static; display: block; margin-top: 2px; padding: 0; transform: none; border: 0; background: transparent; font-size: 8px; line-height: 1.2; letter-spacing: .05em; }
+.trial-experience .budget-preset.selected { color: #fffefa; border-color: #17363d; background: #17363d; box-shadow: none; }
+.trial-experience .budget-preset.selected small { color: #d2ddc9; }
+.trial-experience .budget-stepper { gap: 10px; }
+.trial-experience .budget-stepper button { width: 30px; height: 30px; border-color: #d9ddd2; border-radius: 50%; font-size: 17px; }
+.trial-experience .budget-stepper span,
+.trial-experience .budget-caption { font-size: 12px; color: #738074; }
+.trial-experience .optional-budget-detail { padding: 11px 0; }
+.trial-experience .optional-budget-detail summary { font-size: 12px; color: #435d57; }
+.trial-experience .commitment-list { gap: 12px; }
+.trial-experience .commitment-row { flex-wrap: wrap; gap: 10px; }
+.trial-experience :is(.commitment-row, .schedule-start-row) input { min-height: 38px; border-radius: 5px; font-size: 13px; }
+.trial-experience .live-budget-meter { margin-top: 18px; padding-top: 20px; border-color: #e5e7dc; }
+.trial-experience .budget-meter-copy h3 { font-size: 18px; line-height: 1.4; }
+.trial-experience .budget-meter-copy p { margin-top: 6px; font-size: 12px; }
+.trial-experience .budget-meter-copy > span { font-size: 11px; }
+.trial-experience .budget-meter-track { height: 7px; margin: 16px 0 11px; border-radius: 4px; background: #e5e9de; }
+.trial-experience .budget-meter-granted { background: #66846b; }
+.trial-experience .budget-meter-overflow { background: #b27b53; }
+.trial-experience .budget-meter-legend { gap: 14px; flex-wrap: wrap; font-size: 11px; }
+.trial-experience .new-section-head { margin-bottom: 20px; gap: 12px; }
+.trial-experience .new-section-head h2 { margin-top: 3px; font-size: 24px; line-height: 1.2; letter-spacing: -.025em; }
+.trial-experience .new-section-head > div > span { font-size: 9px; letter-spacing: .14em; }
+.trial-experience .new-section-icon { width: 39px; height: 39px; color: #667858; background: #f1f3e9; border-color: #dce2cd; }
+.trial-experience .capture-note { font-size: 9px; line-height: 1.5; }
+.trial-experience .quick-capture textarea { min-height: 150px; padding: 16px 18px; border-radius: 7px; border-color: #d7dcd0; background: #f8f9f3; font-size: 15px; line-height: 1.85; }
+.trial-experience .quick-add-row { gap: 7px; margin-top: 16px; }
+.trial-experience .quick-add-row > span { width: 100%; margin-bottom: 3px; font-size: 9px; letter-spacing: .13em; }
+.trial-experience .summons-ticket {
+  min-height: 32px;
+  padding: 6px 10px !important;
+  border: 1px solid #e0e3d8 !important;
+  border-radius: 5px !important;
+  background: #fafbf6 !important;
+  color: #4c6255 !important;
+  font-size: 11px;
+  font-weight: 550;
+  box-shadow: none;
+  transform: none;
+}
+.trial-experience .summons-ticket:hover { border-color: #9dab91 !important; background: #f0f3e8 !important; transform: translateY(-1px); }
+.trial-experience .ticket-icon { font-size: 13px; }
+.trial-experience .chaotic-day-button { min-height: 33px; padding: 7px 11px; margin-left: 0; font-size: 11px; border-radius: 5px; color: #715b38; border-color: #d9c8a7; background: #faf6eb; }
+.trial-experience .docket-task-list { margin-top: 23px; gap: 8px; }
+.trial-experience .budget-task-row { min-height: 76px; padding: 12px; gap: 12px; border: 1px solid #e3e5db; border-radius: 8px; background: #fffefa; }
+.trial-experience .budget-task-main strong { font-family: var(--font-court-sans), Arial, sans-serif; font-size: 14px; font-weight: 650; line-height: 1.4; }
+.trial-experience .budget-task-main > span { margin-top: 4px; color: #758071; font-size: 11px; }
+.trial-experience .budget-task-chip { min-height: 26px; padding: 4px 6px; color: #647062; border-color: #e2e6d9; border-radius: 4px; background: #f7f8f1; font-size: 10px; }
+.trial-experience .task-edit-button { color: #647359; font-size: 11px; }
+.trial-experience .budget-task-editor { gap: 14px; padding-top: 16px; border-color: #e3e6db; }
+.trial-experience .budget-task-editor label { font-size: 12px; }
+.trial-experience .budget-task-editor input:not([type=checkbox]) { height: 37px; border-radius: 5px; font-size: 13px; }
+.trial-experience .duration-presets button { padding: 7px 10px; font-size: 12px; }
+.trial-experience .duration-presets small { font-size: 10px; }
+.trial-experience .justice-scale {
+  padding: 28px 16px 24px;
+  border: 1px solid #25464a;
+  border-top: 3px solid #af9160;
+  border-radius: 12px;
+  background: #17363d;
+  box-shadow: 0 12px 30px #17363d10;
+}
+.trial-experience .justice-scale.is-over { box-shadow: 0 12px 30px #17363d10; }
+.trial-experience .scale-heading span { font-size: 9px; letter-spacing: .16em; color: #c9bb96; }
+.trial-experience .scale-heading strong { margin-top: 8px; font-size: 25px; }
+.trial-experience .scale-heading em { color: #dcc394; }
+.trial-experience .scale-rig { margin-top: 22px; height: 320px; }
+.trial-experience .scale-beam { left: 75px; width: calc(100% - 150px); margin-left: 0; }
+.trial-experience .scale-verdict { margin: 12px 12px 0; min-height: 45px; font-size: 13px; font-weight: 500; color: #cfddca; }
+.trial-experience .justice-scale.is-over .scale-verdict { color: #e7bd9d; }
+.trial-experience .pan-label strong { font-size: 21px; }
+.trial-experience .pan-label span { font-size: 9px; }
+.trial-experience .budget-priorities { margin-top: 26px; grid-template-columns: minmax(180px, .8fr) 1.4fr; gap: 30px; }
+.trial-experience .priorities-block > div strong { font-size: 23px; }
+.trial-experience .priorities-block > div small { max-width: 260px; font-size: 12px; line-height: 1.6; }
+.trial-experience .priorities-block > div svg { margin-top: 4px; }
+.trial-experience .priorities-block ol { display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; }
+.trial-experience .priorities-block li { min-height: 44px; gap: 9px; font-size: 13px; border-color: #e6e8dd; }
+.trial-experience .priority-gem { width: 24px; height: 24px; border-radius: 5px; }
+.trial-experience .priorities-block li button { width: 26px; height: 26px; background: #f1f3e9; }
+.trial-experience .single-witness-section { margin-top: 26px; padding: 30px; gap: 25px; border: 1px solid #294b4d !important; border-radius: 12px; background: #17363d !important; box-shadow: none; }
+.trial-experience .single-witness-section::before { display: none; }
+.trial-experience .single-witness-content .new-eyebrow { font-size: 9px; color: #d7c498; }
+.trial-experience .single-witness-content h2 { margin: 15px 0 18px; max-width: 780px; font-size: 28px; line-height: 1.3; letter-spacing: -.02em; }
+.trial-experience .witness-about > span { font-size: 10px; }
+.trial-experience .witness-about strong { font-size: 15px; }
+.trial-experience .single-witness-options { gap: 9px; }
+.trial-experience .single-witness-options button { min-height: 40px; padding: 9px 14px; font-size: 12px; border-radius: 5px; }
+.trial-experience .witness-answer-confirmation { margin-top: 12px; font-size: 12px; }
+.trial-experience .trial-format { margin-top: 30px; gap: 10px; }
+.trial-experience .trial-format > .new-eyebrow { margin-bottom: 6px; }
+.trial-experience .trial-format button { min-height: 84px; padding: 16px 18px; border: 1px solid #dbdfd2; border-radius: 8px; background: #fffefa; box-shadow: none; text-align: left; }
+.trial-experience .trial-format button strong { font-size: 14px; }
+.trial-experience .trial-format button small { margin-top: 6px; font-size: 11px; line-height: 1.45; }
+.trial-experience .trial-format button.active { border-color: #17363d; background: #17363d; box-shadow: none; }
+.trial-experience .trial-format button.active small { color: #d4dec9; }
+.trial-experience .convene-row { margin-top: 28px; padding-top: 22px; gap: 22px; border-top: 1px solid #d5d9cb; }
+.trial-experience .convene-row > span { font-size: 13px; color: #687560; }
+.trial-experience .gavel-button { min-height: 55px; padding: 14px 24px; border: 1px solid #17363d !important; border-radius: 7px; background: #17363d !important; color: #fffdf5 !important; box-shadow: 0 4px 10px #17363d14 !important; font-size: 14px; font-weight: 650 !important; letter-spacing: 0; }
+.trial-experience .gavel-button .gavel-icon { color: #dcc394; }
+.trial-experience .gavel-button:hover:not(:disabled) { background: #244c50 !important; box-shadow: 0 6px 15px #17363d20 !important; }
+.trial-experience .new-footer { max-width: 1280px; margin: auto; padding: 24px 32px; border-top: 1px solid #d5d9cb; color: #73806d; font-size: 10px; letter-spacing: .06em; background: transparent; }
+
+/* The same hierarchy carries through the courtroom and the returned day. */
+.trial-experience .courtroom-topline h1 { font-size: clamp(40px, 5vw, 62px); letter-spacing: -.04em; line-height: 1.1; }
+.trial-experience :is(.skip-verdict, .back-to-court) { min-height: 39px; padding: 9px 13px; border: 1px solid #d7ddcf; border-radius: 6px; color: #3e5c50; background: #fffefa; font-size: 12px; }
+.trial-experience .sentence-summary-new { padding: 27px 30px; border: 1px solid #244b4c; border-radius: 12px; background: #17363d; box-shadow: none; gap: 25px; }
+.trial-experience .sentence-summary-new > div > small { font-size: 10px; letter-spacing: .13em; color: #d1bf96; }
+.trial-experience .sentence-summary-new strong { font-size: 64px; letter-spacing: -.045em; }
+.trial-experience .sentence-summary-new strong em { margin-left: 7px; font: 500 13px var(--font-court-sans), Arial, sans-serif; letter-spacing: 0; }
+.trial-experience .sentence-summary-new > p { font-size: 14px; line-height: 1.7; color: #e0e8d9; }
+.trial-experience .sentence-summary-new > span { font-size: 10px; line-height: 1.8; letter-spacing: .07em; }
+.trial-experience .sentence-summary-new > span b { color: #e2d3ae; font-size: 23px; }
+.trial-experience .overview-head { margin-bottom: 24px; }
+.trial-experience .overview-head h2 { margin-top: 7px; font-size: 28px; letter-spacing: -.035em; }
+.trial-experience .overview-head > span { font-size: 11px; color: #77816e; }
+.trial-experience .day-overview { min-width: 0; gap: 24px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.trial-experience .hour-labels span { font-size: 11px; color: #6b7965; }
+.trial-experience .timeline-new { border-color: #d9e0d3; background-color: #fffefa; border-radius: 12px; }
+.trial-experience .timeline-track-new { border-radius: 6px; background-color: #f5f7ee; }
+.trial-experience .timeline-track-new > div { border-color: #fffefa; }
+.trial-experience .timeline-track-new strong { font-size: 12px; font-weight: 650; }
+.trial-experience .timeline-track-new small { font-size: 10px; }
+.trial-experience .free-gap-new { color: #718468; font-size: 11px; }
+.trial-experience .timeline-legend-new { gap: 14px; margin-top: 17px; font-size: 10px; }
+.trial-experience .order-tile-list { gap: 10px; }
+.trial-experience .day-task-tile { min-height: 90px; gap: 14px; padding: 14px 16px; border: 1px solid #e0e4d7; border-radius: 8px; background: #fffefa; box-shadow: none; }
+.trial-experience .day-task-tile:hover { border-color: #aab89c; background: #fafcf5; box-shadow: 0 3px 14px #17363d08; }
+.trial-experience .tile-main strong { font-size: 17px; line-height: 1.3; }
+.trial-experience .tile-main > small { margin: 4px 0 6px; color: #6f7d65; font-size: 11px; }
+.trial-experience .tile-start { min-height: 34px; margin-left: auto; padding: 7px 12px; color: #fffefa; background: #17363d; border: 1px solid #17363d; border-radius: 5px; box-shadow: none; font-size: 11px; font-weight: 600; }
+.trial-experience .tile-saved { font-size: 10px; color: #7b6b47; }
+.trial-experience .day-task-tile :is(.verdict-stamp, .verdict-badge) { font-size: 9px; letter-spacing: .06em; }
+.trial-experience .sentence-done-button { min-height: 49px; padding: 13px 22px; font-size: 14px; background: #17363d; border-radius: 7px; box-shadow: none; }
+.trial-experience .court-floor { border: 1px solid #c9c6b4; border-radius: 12px; box-shadow: 0 8px 28px #2936220b; }
+.trial-experience .defense-bubble,
+.trial-experience .prosecution-bubble { border-radius: 10px; box-shadow: 0 8px 25px #17363d1c; }
+.trial-experience :is(.defense-bubble, .prosecution-bubble) p { font-size: 16px; line-height: 1.6; }
+.trial-experience .courtroom-footer { padding-top: 24px; }
+.trial-experience .court-error { padding: 15px 18px; border-radius: 7px; font-size: 13px; line-height: 1.5; }
+.trial-experience .order-overlay { padding: 22px; background: #102a30a6; backdrop-filter: blur(6px); }
+.trial-experience .court-order-sheet,
+.trial-experience .cross-exam-card { border: 1px solid #d8ddcf; border-radius: 12px; background: #fffefa; box-shadow: -12px 0 60px #102a3029; }
+.trial-experience .order-sheet-header { padding: 30px; background: #eff2e8; border-bottom: 1px solid #dce2d0; }
+.trial-experience .order-heading-copy h2 { font-size: 32px; line-height: 1.2; color: #17363d; }
+.trial-experience .order-heading-copy p { margin-top: 9px; color: #65735f; font-size: 13px; line-height: 1.6; }
+.trial-experience .order-heading-copy .order-saved { color: #83672f; }
+.trial-experience .not-today { padding: 14px 25px; font-size: 11px; line-height: 1.6; }
+.trial-experience .order-sheet-body { padding: 30px; }
+.trial-experience :is(.first-move-card, .done-when-card) { padding: 19px; border-radius: 8px; background: #f3f5ec; border-color: #dce3d0; }
+.trial-experience :is(.first-move-card, .done-when-card) p { font-size: 15px; line-height: 1.65; }
+.trial-experience .order-step-main { font-size: 15px; line-height: 1.6; }
+.trial-experience .call-judge-panel { padding: 23px; border-radius: 9px; border-color: #d9dfcd; }
+.trial-experience .cross-exam-card { padding: 34px; }
+.trial-experience .cross-exam-card h2 { font-size: 31px; line-height: 1.25; color: #17363d; }
+.trial-experience .cross-exam-card > p,
+.trial-experience .cross-answer p { font-size: 15px; line-height: 1.65; }
+.trial-experience .cross-question-list button { min-height: 47px; padding: 12px 15px; border-radius: 6px; font-size: 13px; }
+.trial-experience .cross-plea { padding: 22px; border-radius: 8px; }
+
+@media (max-width: 1100px) {
+  .trial-experience .docket-stage-grid { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
+  .trial-experience .docket-paper { padding: 22px; }
+  .trial-experience .budget-controls-row { flex-wrap: wrap; }
+  .trial-experience .budget-task-chips { max-width: 190px; }
+}
+@media (max-width: 860px) {
+  .trial-experience .new-court-header { padding: 18px 24px; gap: 17px; }
+  .trial-experience .new-brand small { max-width: 275px; font-size: 11px; }
+  .trial-experience .header-recovered { min-width: 115px; padding-inline: 17px; }
+  .trial-experience .docket-stage-grid { grid-template-columns: minmax(0, 1fr); }
+  .trial-experience .docket-stage-scale { position: static; order: initial; }
+  .trial-experience .justice-scale { max-width: 100%; }
+  .trial-experience .scale-rig { height: 260px; max-width: 400px; margin-inline: auto; }
+  .trial-experience .budget-priorities { grid-template-columns: 1fr; gap: 22px; }
+  .trial-experience .new-main { padding: 25px 24px 50px; }
+  .trial-experience .day-tiles { padding: 22px; }
+}
+@media (max-width: 600px) {
+  .trial-experience .new-court-header { padding: 17px 18px; gap: 12px; flex-wrap: wrap; }
+  .trial-experience .new-brand { flex-basis: 100%; }
+  .trial-experience .new-brand strong { font-size: 24px; }
+  .trial-experience .new-brand small { max-width: none; font-size: 10px; }
+  .trial-experience .header-recovered { border: 0; padding: 7px 0 0; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; }
+  .trial-experience .header-recovered span { font-size: 8px; }
+  .trial-experience .header-recovered strong { margin: 0; font-size: 25px; }
+  .trial-experience .new-source-pill { margin-left: auto; font-size: 10px; padding: 5px 10px; }
+  .trial-experience .new-main { padding: 22px 16px 40px; }
+  .trial-experience .new-stepper { width: 100%; margin-bottom: 28px; gap: 2px; }
+  .trial-experience .new-stepper button { min-width: 0; flex: 1; padding: 10px 6px; gap: 5px; font-size: 11px; }
+  .trial-experience .new-stepper button span { width: 19px; height: 19px; font-size: 9px; }
+  .trial-experience .budget-docket-heading { padding: 0 0 24px; }
+  .trial-experience .budget-docket-heading h1 { font-size: 43px; }
+  .trial-experience .budget-docket-heading p { font-size: 13px; }
+  .trial-experience .budget-docket-heading .docket-seal { display: none; }
+  .trial-experience .new-eyebrow { font-size: 8px; letter-spacing: .12em; }
+  .trial-experience .docket-paper { padding: 20px 17px; }
+  .trial-experience .budget-first-top h2 { font-size: 23px; }
+  .trial-experience .available-time-label { font-size: 8px; }
+  .trial-experience .available-time-label span { font-size: 29px; }
+  .trial-experience .budget-preset { min-width: 57px; min-height: 45px; padding: 7px 12px; }
+  .trial-experience .budget-stepper span { font-size: 10px; }
+  .trial-experience .capture-note { display: none; }
+  .trial-experience .budget-task-row { padding: 11px 9px; gap: 8px; }
+  .trial-experience .budget-task-main strong { font-size: 13px; }
+  .trial-experience .budget-task-chips { max-width: none; }
+  .trial-experience .budget-task-chip { font-size: 9px; }
+  .trial-experience .priorities-block ol { column-gap: 14px; }
+  .trial-experience .single-witness-section { padding: 21px 18px; gap: 13px; }
+  .trial-experience .single-witness-content h2 { font-size: 23px; }
+  .trial-experience .single-witness-icon { width: 58px; flex-shrink: 0; }
+  .trial-experience .trial-format { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trial-experience .trial-format > .new-eyebrow { grid-column: 1/-1; }
+  .trial-experience .trial-format button { min-height: 88px; padding: 14px 12px; }
+  .trial-experience .trial-format button strong { font-size: 12px; }
+  .trial-experience .trial-format button small { font-size: 10px; }
+  .trial-experience .convene-row { align-items: stretch; flex-direction: column; gap: 13px; }
+  .trial-experience .convene-row .gavel-button { width: 100%; }
+  .trial-experience .new-footer { padding: 21px 18px; flex-wrap: wrap; gap: 10px; font-size: 8px; }
+  .trial-experience .sentence-summary-new { padding: 23px; gap: 17px; }
+  .trial-experience .sentence-summary-new strong { font-size: 52px; }
+  .trial-experience .timeline-new,
+  .trial-experience .day-tiles { padding: 20px 17px; }
+  .trial-experience .day-task-tile { padding: 12px; gap: 10px; }
+  .trial-experience .tile-main strong { font-size: 15px; }
+  .trial-experience .courtroom-topline { align-items: flex-start; flex-direction: column; gap: 16px; }
+  .trial-experience .courtroom-topline h1 { font-size: 40px; }
+  .trial-experience .order-overlay { padding: 0; }
+  .trial-experience .court-order-sheet { border-radius: 0; }
+  .trial-experience .cross-exam-card { padding: 28px 21px; border-radius: 0; }
+  .trial-experience .order-sheet-body,
+  .trial-experience .order-sheet-header { padding: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trial-experience *, .trial-experience *::before, .trial-experience *::after { scroll-behavior: auto !important; transition-duration: 0s !important; }
+}

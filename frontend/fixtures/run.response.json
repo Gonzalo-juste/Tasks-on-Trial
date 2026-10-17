@@ -1,0 +1,105 @@
+{
+  "api_version": "1",
+  "request_id": "run-01",
+  "revision": 1,
+  "source": "replay",
+  "status": "ok",
+  "judge_summary": "Two approved, two reduced, one dismissed. The court returns 120 minutes to the defendant.",
+  "decisions": [
+    {
+      "task_id": "maths", "persona": { "emoji": "📐", "name": "The Exam Hawk" },
+      "defense": "Exam on Monday. Two hours today, or we panic on Sunday.",
+      "prosecution": "No objection. The exam is real and the time is proportionate.",
+      "verdict": "APPROVED", "original_min": 120, "approved_min": 120, "saved_min": 0,
+      "effective_title": "Study maths", "reason": "Mandatory: maths exam on Monday.",
+      "cut_scope": [],
+      "first_move": "Open last week's problem sheet and do question 1.",
+      "action_plan": [
+        { "step": "Redo last week's problem sheet", "minutes": 60 },
+        { "step": "Review the two weakest topics", "minutes": 45 },
+        { "step": "Write a one-page summary of your mistakes", "minutes": 15 }
+      ],
+      "done_when": "Problem sheet finished and mistakes summarised on one page.",
+      "release": null,
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "gym", "persona": { "emoji": "🏋️", "name": "Coach Thunder" },
+      "defense": "Health is your number one priority. Sixty minutes. No excuses.",
+      "prosecution": "Is a full hour needed? The declared priority says yes. Objection withdrawn.",
+      "verdict": "APPROVED", "original_min": 60, "approved_min": 60, "saved_min": 0,
+      "effective_title": "Go to the gym", "reason": "Matches the top declared priority: health.",
+      "cut_scope": [],
+      "first_move": "Put your trainers by the door.",
+      "action_plan": [
+        { "step": "Training session", "minutes": 45 },
+        { "step": "Stretching", "minutes": 15 }
+      ],
+      "done_when": "45 minutes of training and 15 of stretching done.",
+      "release": null,
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "emails", "persona": { "emoji": "📧", "name": "The Inbox Martyr" },
+      "defense": "I need a full hour. Every single email deserves a reply!",
+      "prosecution": "Only five need a reply today. That is fifteen minutes, not sixty.",
+      "verdict": "REDUCED", "original_min": 60, "approved_min": 15, "saved_min": 45,
+      "effective_title": "Reply to the five urgent emails", "reason": "User fact: only five emails need a reply today. Reduction authorised.",
+      "cut_scope": ["Replying to the non-urgent emails (snooze them to Monday)", "Chasing inbox zero"],
+      "first_move": "Search your inbox and star the five emails that need a reply today.",
+      "action_plan": [
+        { "step": "Star the five urgent emails", "minutes": 3 },
+        { "step": "Reply to each one in about two minutes", "minutes": 10 },
+        { "step": "Snooze everything else to Monday", "minutes": 2 }
+      ],
+      "done_when": "Five replies sent. Nothing else.",
+      "release": null,
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "presentation", "persona": { "emoji": "📊", "name": "The Perfectionist" },
+      "defense": "Two hours to make it flawless. Animations, transitions, the works.",
+      "prosecution": "Only the core slides are essential. Animations are optional. Ninety minutes covers it.",
+      "verdict": "REDUCED", "original_min": 120, "approved_min": 90, "saved_min": 30,
+      "effective_title": "Build the essential slides", "reason": "User fact: animations are optional. Reduced to the confirmed minimum.",
+      "cut_scope": ["Animations and transitions", "Visual polish beyond the core slides"],
+      "first_move": "Write your three key messages on a sticky note.",
+      "action_plan": [
+        { "step": "Outline the three key messages", "minutes": 15 },
+        { "step": "Build the essential slides", "minutes": 60 },
+        { "step": "One run-through, out loud", "minutes": 15 }
+      ],
+      "done_when": "Core slides built and rehearsed once, out loud.",
+      "release": null,
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "instagram", "persona": { "emoji": "📱", "name": "Defender of Leisure" },
+      "defense": "Forty-five minutes of scrolling. You deserve it.",
+      "prosecution": "No fact shows scrolling helps today. Rest may be the real need, but it is unconfirmed.",
+      "verdict": "DISMISSED", "original_min": 45, "approved_min": 0, "saved_min": 45,
+      "effective_title": "Check Instagram", "reason": "Not justified for today. A possible need for rest is unconfirmed.",
+      "cut_scope": ["45 minutes of scrolling"],
+      "first_move": null,
+      "action_plan": [],
+      "done_when": null,
+      "release": { "action": "drop", "note": "Not today. If you are tired, cross-examine it: the real need may be rest." },
+      "schedule_status": "NOT_APPLICABLE", "pending_reason": null,
+      "suggested_need": { "need": "rest", "status": "unconfirmed" }
+    }
+  ],
+  "schedule": [
+    { "task_id": "maths", "start": "2026-10-17T09:00:00+01:00", "end": "2026-10-17T11:00:00+01:00" },
+    { "task_id": "gym", "start": "2026-10-17T11:00:00+01:00", "end": "2026-10-17T12:00:00+01:00" },
+    { "task_id": "emails", "start": "2026-10-17T12:00:00+01:00", "end": "2026-10-17T12:15:00+01:00" },
+    { "task_id": "presentation", "start": "2026-10-17T14:00:00+01:00", "end": "2026-10-17T15:30:00+01:00" }
+  ],
+  "metrics": {
+    "original_min": 405, "approved_min": 285, "minutes_recovered": 120,
+    "pending_min": 0, "free_capacity_min": 195
+  },
+  "conflicts": [],
+  "appeals_used": 0,
+  "change": null,
+  "meta": { "model": "example-model", "llm_calls": 0, "latency_ms": 0 }
+}
