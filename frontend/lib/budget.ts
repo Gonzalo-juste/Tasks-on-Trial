@@ -49,17 +49,44 @@ export function dayCapacity(constitution: Constitution) {
 
 export type BudgetStatus = "fits" | "tight" | "overbooked"
 
-/** What the tasks ask for versus what the day can give. Drives the Docket's overbooking meter. */
+/** Budget presets for the Docket, in minutes. 4h is the suggested default. */
+export const BUDGET_PRESETS = [120, 240, 360, 480] as const
+export const DEFAULT_BUDGET_MIN = 240
+export const BUDGET_STEP_MIN = 30
+
+/**
+ * What the tasks ask for versus the minutes the user granted the court. Drives the Docket's meter.
+ * The granted budget is discretionary time after fixed commitments, so fixed blocks only limit it
+ * when the calendar window is smaller: effective = min(granted, free calendar capacity).
+ */
 export function budget(caseData: Case) {
   const { usable_min } = dayCapacity(caseData.constitution)
+  const granted_min = caseData.budget_min ?? usable_min
+  const effective_min = Math.min(granted_min, usable_min)
   const tasks = caseData.tasks as BudgetTask[]
   const work_min = tasks.reduce((sum, task) => sum + task.duration_min, 0)
   const buffer_min = tasks.reduce((sum, task) => sum + bufferOf(task), 0)
   const requested_min = work_min + buffer_min
-  const balance_min = usable_min - requested_min
-  const ratio = usable_min > 0 ? requested_min / usable_min : Infinity
+  const mandatory_min = tasks.filter((t) => t.mandatory).reduce((sum, t) => sum + t.duration_min + bufferOf(t), 0)
+  const over_by_min = Math.max(0, requested_min - effective_min)
+  const ratio = effective_min > 0 ? requested_min / effective_min : Infinity
   const status: BudgetStatus = ratio > 1 ? "overbooked" : ratio > 0.85 ? "tight" : "fits"
-  return { usable_min, work_min, buffer_min, requested_min, balance_min, ratio, status }
+  return {
+    granted_min, usable_min, effective_min, work_min, buffer_min, requested_min, mandatory_min, over_by_min, ratio, status,
+    /** Mandatory tasks alone exceed the budget: no verdict can fix that. */
+    impossible: mandatory_min > effective_min,
+    capped_by_calendar: effective_min < granted_min,
+  }
+}
+
+const hours = (minutes: number) => (minutes % 60 ? `${minutes} minutes` : `${minutes / 60} hour${minutes === 60 ? "" : "s"}`)
+
+/** Copy for the Docket's meter. */
+export function budgetHeadline(b: ReturnType<typeof budget>) {
+  const count = `You have granted the court ${hours(b.effective_min)}. Your tasks demand ${b.requested_min} minutes.`
+  if (b.impossible) return { title: count, verdict: "Impossible as filed: your mandatory tasks alone exceed the budget. Grant more time or review what is mandatory." }
+  if (b.over_by_min > 0) return { title: count, verdict: `${b.over_by_min} minutes over budget. Someone must make a case.` }
+  return { title: count, verdict: `${b.effective_min - b.requested_min} minutes to spare. The court may still cut.` }
 }
 
 /** Clock times for each step: the slot starts with its buffer, then steps run back to back. */
@@ -80,7 +107,8 @@ export function checkInvariants(result: TrialResult): string[] {
     issues.push(`Sum of saved_min (${savedTotal}) differs from minutes_recovered (${result.metrics.minutes_recovered}).`)
   }
   for (const d of result.decisions) {
-    if (d.saved_min !== d.original_min - d.approved_min) issues.push(`${d.task_id}: saved_min is not original - approved.`)
+    const expectedSaved = d.original_min - d.approved_min + (d.verdict === "DISMISSED" ? d.buffer_min ?? 0 : 0)
+    if (d.saved_min !== expectedSaved) issues.push(`${d.task_id}: saved_min ${d.saved_min}, expected ${expectedSaved}.`)
     if (d.verdict !== "DISMISSED") {
       const planMin = d.action_plan.reduce((sum, step) => sum + step.minutes, 0)
       if (planMin !== d.approved_min) issues.push(`${d.task_id}: plan sums to ${planMin}, approved is ${d.approved_min}.`)
@@ -125,10 +153,14 @@ function placementOrder(tasks: BudgetTask[], priorities: Category[]) {
   return placed
 }
 
-/** Greedy placement of approved minutes into the free intervals. Tasks are indivisible. */
+/**
+ * Greedy placement of approved minutes into the free intervals, within the granted budget
+ * (work + buffers). Tasks are indivisible.
+ */
 export function planDay(caseData: Case, approved: Record<string, number>) {
   const free = dayCapacity(caseData.constitution).free.map(([a, b]) => [a, b] as [number, number])
   const tasks = placementOrder(caseData.tasks as BudgetTask[], caseData.constitution.priorities)
+  let remainingBudget = budget(caseData).effective_min
   const ends: Record<string, number> = {}
   const schedule: Slot[] = []
   const pending: { task_id: string; reason: "no_fit" | "deadline" | "depends_unmet" }[] = []
@@ -141,6 +173,10 @@ export function planDay(caseData: Case, approved: Record<string, number>) {
     }
     const earliest = Math.max(0, ...task.depends_on.map((dep) => ends[dep] ?? 0))
     const need = minutes + bufferOf(task)
+    if (need > remainingBudget) {
+      pending.push({ task_id: task.id, reason: "no_fit" })
+      continue
+    }
     const deadline = task.deadline ? toMinutes(task.deadline) : Infinity
     const index = free.findIndex(([a, b]) => Math.max(a, earliest) + need <= b)
     if (index === -1) {
@@ -155,6 +191,7 @@ export function planDay(caseData: Case, approved: Record<string, number>) {
     const [a, b] = free[index]
     free.splice(index, 1, ...([[a, start], [start + need, b]] as [number, number][]).filter(([x, y]) => y > x))
     ends[task.id] = start + need
+    remainingBudget -= need
     schedule.push({ task_id: task.id, start: toClock(start), end: toClock(start + need), buffer_min: bufferOf(task) })
   }
   schedule.sort((x, y) => toMinutes(x.start) - toMinutes(y.start))
@@ -175,6 +212,7 @@ export function fallbackResult(caseData: Case): TrialResult {
     original_min: task.duration_min,
     approved_min: task.duration_min,
     saved_min: 0,
+    buffer_min: bufferOf(task as BudgetTask),
     effective_title: task.title,
     reason: "Rule-based fallback: confirmed duration kept.",
     cut_scope: [],
@@ -186,16 +224,20 @@ export function fallbackResult(caseData: Case): TrialResult {
     pending_reason: pendingById.get(task.id) ?? null,
     suggested_need: null,
   }))
-  const approvedMin = decisions.reduce((sum, d) => sum + d.approved_min, 0)
-  const pendingMin = decisions.filter((d) => d.schedule_status === "PENDING").reduce((sum, d) => sum + d.approved_min, 0)
+  // Metrics count buffers: they are part of what each task costs the user.
+  const approvedMin = decisions.reduce((sum, d) => sum + d.approved_min + (d.buffer_min ?? 0), 0)
+  const pendingMin = decisions
+    .filter((d) => d.schedule_status === "PENDING")
+    .reduce((sum, d) => sum + d.approved_min + (d.buffer_min ?? 0), 0)
   const scheduledLoad = schedule.reduce((sum, slot) => sum + toMinutes(slot.end) - toMinutes(slot.start), 0)
+  const b = budget(caseData)
   return {
     api_version: "1",
     request_id: `fallback-${Date.now()}`,
     revision: 1,
     source: "fallback",
     status: "ok",
-    judge_summary: "The court is offline. Rule-based fallback: nothing cut, everything placed where it fits.",
+    judge_summary: "The court is offline. Rule-based fallback: nothing cut, tasks placed by priority until the budget runs out.",
     decisions,
     schedule,
     metrics: {
@@ -204,6 +246,8 @@ export function fallbackResult(caseData: Case): TrialResult {
       minutes_recovered: 0,
       pending_min: pendingMin,
       free_capacity_min: dayCapacity(caseData.constitution).usable_min - scheduledLoad,
+      budget_min: b.effective_min,
+      unallocated_min: b.effective_min - scheduledLoad,
     },
     conflicts: [],
     appeals_used: 0,

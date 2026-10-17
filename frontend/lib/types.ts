@@ -11,6 +11,8 @@ export interface Task {
   category: Category
   allow_reduction: boolean
   facts: string[]
+  /** Travel/setup overhead before the task. Counts toward the budget, never toward the plan steps. */
+  buffer_min?: number
 }
 
 export interface Constitution {
@@ -24,6 +26,8 @@ export interface Constitution {
 export interface Case {
   tasks: Task[]
   constitution: Constitution
+  /** Minutes the user grants the court today (after fixed commitments). Tasks compete for it. */
+  budget_min?: number
 }
 
 export type Verdict = "APPROVED" | "REDUCED" | "DISMISSED"
@@ -41,7 +45,9 @@ export interface Decision {
   verdict: Verdict
   original_min: number
   approved_min: number
+  /** original_min - approved_min, plus buffer_min when the task is DISMISSED. */
   saved_min: number
+  buffer_min?: number
   effective_title: string
   reason: string
   cut_scope: string[]
@@ -62,8 +68,16 @@ export interface TrialResult {
   status: "ok" | "conflict"
   judge_summary: string
   decisions: Decision[]
-  schedule: { task_id: string; start: string; end: string }[]
-  metrics: { original_min: number; approved_min: number; minutes_recovered: number; pending_min: number; free_capacity_min: number }
+  schedule: { task_id: string; start: string; end: string; buffer_min?: number }[]
+  metrics: {
+    original_min: number
+    approved_min: number
+    minutes_recovered: number
+    pending_min: number
+    free_capacity_min: number
+    budget_min?: number
+    unallocated_min?: number
+  }
   conflicts: { code: string; task_ids: string[]; message: string }[]
   appeals_used: number
   change: {

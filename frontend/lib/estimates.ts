@@ -1,5 +1,8 @@
 // Instant, local first guess for the Docket's quick capture. It fills every chip in milliseconds;
-// /api/trial/init then refines the values. Shared defaults keep frontend and backend estimates consistent.
+// /api/trial/init may refine the values. Shared defaults keep frontend and backend estimates consistent.
+//
+// Evidence rule: `facts` only ever holds what the user actually wrote or tapped. Archetype defaults
+// (durations, buffers, minimums) are estimates and are listed in `estimated`, never in `facts`.
 import type { Category, Task } from "./types"
 
 export type Archetype = "dumbbell" | "envelope" | "book" | "slides" | "phone" | "broom" | "cart" | "briefcase" | "heart" | "note"
@@ -19,7 +22,7 @@ export const ARCHETYPES: Record<Archetype, ArchetypeDefaults> = {
   envelope: { emoji: "✉️", category: "work", duration_min: 30, minimum_min: 10, buffer_min: 0, keywords: /\b(e-?mails?|inbox|mail|reply|replies|messages?)\b/i },
   book: { emoji: "📚", category: "learning", duration_min: 90, minimum_min: 45, buffer_min: 0, keywords: /\b(study|studying|revise|revision|exam|read|reading|homework|course|lecture|learn)\b/i },
   slides: { emoji: "📊", category: "work", duration_min: 90, minimum_min: 60, buffer_min: 0, keywords: /\b(slides?|presentation|deck|pitch|keynote|powerpoint)\b/i },
-  phone: { emoji: "📱", category: "leisure", duration_min: 30, minimum_min: 10, buffer_min: 0, keywords: /\b(instagram|tiktok|twitter|x\.com|youtube|scroll|scrolling|social media|reddit|netflix)\b/i },
+  phone: { emoji: "📱", category: "leisure", duration_min: 30, minimum_min: 10, buffer_min: 0, keywords: /\b(instagram|tiktok|twitter|youtube|scroll|scrolling|social|reddit|netflix)\b/i },
   broom: { emoji: "🧹", category: "other", duration_min: 30, minimum_min: 15, buffer_min: 0, keywords: /\b(clean|cleaning|laundry|dishes|tidy|hoover|vacuum|chores?)\b/i },
   cart: { emoji: "🛒", category: "other", duration_min: 45, minimum_min: 30, buffer_min: 15, keywords: /\b(shop|shopping|groceries|supermarket|buy|errands?|pharmacy)\b/i },
   briefcase: { emoji: "💼", category: "work", duration_min: 60, minimum_min: 30, buffer_min: 0, keywords: /\b(meeting|report|client|work|project|invoice|call with|proposal|code|coding)\b/i },
@@ -27,28 +30,57 @@ export const ARCHETYPES: Record<Archetype, ArchetypeDefaults> = {
   note: { emoji: "🗒️", category: "other", duration_min: 30, minimum_min: 15, buffer_min: 0, keywords: /$^/ },
 }
 
+// "slides" before "book" so "Finish pitch slides" is not read as study; "phone" first so "scroll" wins.
 const ORDER: Archetype[] = ["phone", "envelope", "slides", "book", "dumbbell", "cart", "broom", "heart", "briefcase"]
 
 export function detectArchetype(text: string): Archetype {
   return ORDER.find((name) => ARCHETYPES[name].keywords.test(text)) ?? "note"
 }
 
-const DAY_WORDS = /\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week)\b/i
-const MANDATORY_WORDS = /\b(exam|deadline|due|must|mandatory|urgent|submit|submission|interview|appointment)\b/i
-const DEADLINE_TIME = /\b(?:by|before|until)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i
+/** One-tap additions for the Docket. Each one appends a line to the quick-capture text. */
+export const QUICK_ADD: { label: string; line: string }[] = [
+  { label: "Study", line: "Study" },
+  { label: "Gym", line: "Gym" },
+  { label: "Emails", line: "Reply to emails" },
+  { label: "Slides", line: "Finish slides" },
+  { label: "Chores", line: "Chores" },
+  { label: "Social", line: "Scroll social media" },
+]
+
+/** Rough sizes for editing an estimated duration. Explicit user durations are never replaced. */
+export const SIZES = { XS: 15, S: 30, M: 60, L: 120 } as const
+
+/** "Try a chaotic day": real parser input, not a hard-coded verdict. 335 minutes requested. */
+export const CHAOTIC_DAY = [
+  "Finish pitch slides 90 min due 6pm",
+  "Study for exam 90 min",
+  "Gym 60 min + 20 min travel",
+  "Reply to emails 30 min",
+  "Scroll TikTok 45 min",
+].join("\n")
+
+export const MAX_TASKS = 6
+
+// Only explicit words make a task non-negotiable. "Exam tomorrow" is context, not an obligation to study today.
+const MANDATORY_WORDS = /\b(must|have to|has to|mandatory|non-negotiable|required|promised)\b/i
+const CONTEXT_WORDS = /\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|exam|deadline|interview|appointment)\b/i
+const DEADLINE_TIME = /\b(?:by|before|until|due(?:\s+(?:at|by))?)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i
+const BUFFER = /\+\s*(\d+)\s*(?:m|min|mins|minutes?)\b(?:\s+(?:of\s+)?(?:travel|commute|setup|getting there))?/i
 const EXPLICIT_DURATION = /\b(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes?)\b/i
+
+export type EstimatedField = "duration_min" | "minimum_min" | "buffer_min" | "category" | "allow_reduction"
 
 export interface CapturedTask {
   task: Task & { buffer_min: number }
   archetype: Archetype
   emoji: string
   /** Fields that were guessed, so the UI can mark them "est." until the user or /init confirms them. */
-  estimated: (keyof Task | "buffer_min")[]
+  estimated: EstimatedField[]
 }
 
-const STOP_WORDS = /^(a|an|the|my|to|for|of|on|in|at|by|before|until|and|with|some|do|get|go|s|min|mins|minutes?|h|hrs?|hours?|am|pm|today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next|week|\d+)$/
+const STOP_WORDS = /^(a|an|the|my|to|for|of|on|in|at|by|before|until|due|and|with|some|do|get|go|s|min|mins|minutes?|h|hrs?|hours?|am|pm|travel|today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next|week|\d+)$/
 
-/** Short, readable id from the first two meaningful words, e.g. "study-maths". */
+/** Short, readable id from the first two meaningful words, e.g. "study-exam". */
 function slugify(text: string, taken: Set<string>) {
   const words = text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word && !STOP_WORDS.test(word))
   const base = words.slice(0, 2).join("-") || "task"
@@ -63,8 +95,11 @@ function parseDeadline(line: string): string | null {
   if (!match) return null
   let hours = Number(match[1])
   const minutes = Number(match[2] ?? 0)
-  if (match[3]?.toLowerCase() === "pm" && hours < 12) hours += 12
-  if (match[3]?.toLowerCase() === "am" && hours === 12) hours = 0
+  const meridiem = match[3]?.toLowerCase()
+  if (meridiem === "pm" && hours < 12) hours += 12
+  if (meridiem === "am" && hours === 12) hours = 0
+  // "due 6" without am/pm during a working day almost always means the afternoon.
+  if (!meridiem && hours >= 1 && hours <= 7) hours += 12
   if (hours > 23 || minutes > 59) return null
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
 }
@@ -86,18 +121,39 @@ export function captureLine(line: string, taken: Set<string>, ratios: Partial<Re
   const text = line.trim()
   const archetype = detectArchetype(text)
   const defaults = ARCHETYPES[archetype]
-  const estimated: CapturedTask["estimated"] = ["category", "minimum_min", "buffer_min", "allow_reduction"]
+  const estimated: EstimatedField[] = ["category"]
 
-  const explicit = parseDuration(text)
+  const bufferMatch = text.match(BUFFER)
+  const withoutBuffer = bufferMatch ? text.replace(bufferMatch[0], " ") : text
+  const deadlineMatch = withoutBuffer.match(DEADLINE_TIME)
+  const deadline = parseDeadline(withoutBuffer)
+
+  const explicit = parseDuration(withoutBuffer)
   const ratio = ratios[archetype] ?? 1
   const duration = explicit ?? Math.max(5, Math.round((defaults.duration_min * ratio) / 5) * 5)
   if (explicit === null) estimated.push("duration_min")
 
+  const buffer = bufferMatch ? Number(bufferMatch[1]) : defaults.buffer_min
+  if (!bufferMatch) estimated.push("buffer_min")
+
   const mandatory = MANDATORY_WORDS.test(text)
-  const deadline = parseDeadline(text)
   const minimum = mandatory ? duration : Math.min(duration, defaults.minimum_min)
-  // The user's own words are the only evidence: keep the line as a fact when it says more than a title.
-  const facts = DAY_WORDS.test(text) || MANDATORY_WORDS.test(text) || deadline || text.split(/\s+/).length > 3 ? [capitalise(text)] : []
+  if (!mandatory) estimated.push("minimum_min", "allow_reduction")
+
+  // Facts are the user's own words only.
+  const facts: string[] = []
+  if (deadline) facts.push(`Due at ${deadline}`)
+  if (bufferMatch) facts.push(`Needs ${buffer} minutes of travel or setup`)
+  if (CONTEXT_WORDS.test(text) || mandatory) facts.push(capitalise(text))
+
+  const title = capitalise(
+    withoutBuffer
+      .replace(deadlineMatch?.[0] ?? "", " ")
+      .replace(EXPLICIT_DURATION, " ")
+      .replace(/[—–-]\s*$/, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim(),
+  )
 
   return {
     archetype,
@@ -105,10 +161,10 @@ export function captureLine(line: string, taken: Set<string>, ratios: Partial<Re
     estimated,
     task: {
       id: slugify(text, taken),
-      title: capitalise(text.replace(EXPLICIT_DURATION, "").replace(/\s{2,}/g, " ").trim()),
+      title,
       duration_min: duration,
       minimum_min: minimum,
-      buffer_min: defaults.buffer_min,
+      buffer_min: buffer,
       mandatory,
       deadline,
       depends_on: [],
@@ -119,13 +175,15 @@ export function captureLine(line: string, taken: Set<string>, ratios: Partial<Re
   }
 }
 
-/** Quick capture: one task per line, at most six. */
-export function quickCapture(rawText: string, ratios: Partial<Record<Archetype, number>> = {}): CapturedTask[] {
+/** Quick capture: one task per line. The first six enter the docket; the rest wait outside, never silently dropped. */
+export function quickCapture(rawText: string, ratios: Partial<Record<Archetype, number>> = {}) {
   const taken = new Set<string>()
-  return rawText
+  const lines = rawText
     .split(/\r?\n|;/)
-    .map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim())
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim())
     .filter(Boolean)
-    .slice(0, 6)
-    .map((line) => captureLine(line, taken, ratios))
+  return {
+    tasks: lines.slice(0, MAX_TASKS).map((line) => captureLine(line, taken, ratios)),
+    waiting: lines.slice(MAX_TASKS),
+  }
 }
