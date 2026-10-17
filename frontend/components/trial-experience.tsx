@@ -42,8 +42,8 @@ function buildPact(dismissed: Decision, tasks: Task[], decisions: Decision[]): P
   const ally = decisions.find((decision) => decision.verdict !== "DISMISSED" && tasks.some((task) => task.id === decision.task_id && archetypeForTask(task) === "runner"))
   const allyTask = ally && tasks.find((task) => task.id === ally.task_id)
   if (!ally || !allyTask) return null
-  // The pact uses the run's full confirmed time (no increase): 1/3 running to the gym, 2/3 strength.
-  const minutes = ally.original_min
+  // The pact takes the gym's confirmed time (no increase): 1/3 running to the gym, 2/3 strength.
+  const minutes = gymTask.duration_min
   const run = Math.max(5, Math.round(minutes / 3))
   return {
     allyId: ally.task_id,
@@ -601,10 +601,12 @@ export default function TrialExperience() {
     setStage("courtroom")
     setDeliberating(`Pact: ${gymTitle} + ${pact.allyTitle}`)
     try {
+      // The dismissed task takes the pact; its ally is merged into it and the commute buffer goes to zero.
       const send = (proposal: Proposal) => appeal({
-        case: trialCase(), task_id: pact.allyId,
+        case: trialCase(), task_id: taskId,
         new_fact: `${gymTitle} and ${pact.allyTitle} agreed a pact: running to the gym replaces the commute, so both are served in one session.`,
-        accepted_replacement: proposal, previous_result: result, base_revision: result.revision,
+        accepted_replacement: { ...proposal, buffer_min: 0 }, merge_task_ids: [pact.allyId],
+        previous_result: result, base_revision: result.revision,
       })
       let updated: TrialResult
       try {
@@ -617,8 +619,8 @@ export default function TrialExperience() {
         updated = await send({ ...pact.proposal, duration_min: minutes, action_plan: [{ step: "Run to the gym", minutes: run }, { step: "Strength circuit at the gym", minutes: minutes - run }] })
       }
       setResult(updated)
-      setMergedInto((current) => ({ ...current, [taskId]: pact.allyId }))
-      setReplay({ taskId: pact.allyId, key: Date.now() })
+      setMergedInto((current) => ({ ...current, [taskId]: pact.allyId, [pact.allyId]: taskId }))
+      setReplay({ taskId, key: Date.now() })
       setSeenTrialId(updated.request_id)
       setStage("courtroom")
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The court could not hear the pact.") }

@@ -72,6 +72,8 @@ export interface Decision {
   schedule_status: "SCHEDULED" | "PENDING" | "NOT_APPLICABLE"
   pending_reason: "no_fit" | "deadline" | "depends_unmet" | null
   suggested_need: { need: string; status: "unconfirmed" | "confirmed" } | null
+  /** Set on a task folded into another through a pact. */
+  merged_into?: string
 }
 
 export interface TrialResult {
@@ -117,6 +119,8 @@ export interface Proposal {
   first_move: string
   action_plan: PlanStep[]
   done_when: string
+  /** Pact replacements can drop the travel buffer (0 is significant). */
+  buffer_min?: number
 }
 
 export interface InterrogationResult {
