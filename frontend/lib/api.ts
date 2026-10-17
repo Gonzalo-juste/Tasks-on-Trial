@@ -131,9 +131,24 @@ export async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
-  if (response.status === 409) throw new Error("The court has restarted since this trial. Convene the court again, then call the judge.")
-  if (!response.ok) throw new Error(`The court could not complete the request (${response.status}). Please try again or use replay.`)
+  if (!response.ok) throw new Error(await errorMessage(response))
   return response.json() as Promise<T>
+}
+
+/** Turns the backend's { error: { code, message } } into something the user can act on. */
+async function errorMessage(response: Response) {
+  let code = ""
+  let message = ""
+  try {
+    const body = (await response.json()) as { error?: { code?: string; message?: string } }
+    code = body.error?.code ?? ""
+    message = body.error?.message ?? ""
+  } catch {
+    // Not JSON (e.g. a proxy error page): fall through to the generic text.
+  }
+  if (code === "REVISION_CONFLICT") return "The court has restarted since this trial. Convene the court again, then try once more."
+  if (message) return message
+  return `The court could not complete the request (${response.status}). Please try again or use replay.`
 }
 
 export async function run(caseData: Case): Promise<TrialResult> {

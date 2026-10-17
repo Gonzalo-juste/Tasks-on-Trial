@@ -11,6 +11,8 @@ import { demoCase } from "@/lib/mocks"
 import type { Archetype, Case, Decision, InitResult, InterrogationResult, QuestionType, ReviseResult, Task, TrialResult, Verdict } from "@/lib/types"
 
 const verdictTone: Record<Verdict, string> = { APPROVED: "approved", REDUCED: "reduced", DISMISSED: "dismissed" }
+/** Display only: drop engine codes like "not_proven: " (the raw reason must go back to the backend unchanged). */
+const cleanReason = (reason: string) => reason.replace(/^[a-z_]+:\s*/, "")
 
 function emptyCase(): Case {
   const data = structuredClone(demoCase)
@@ -32,7 +34,9 @@ function archetypeForTask(task: Task): Archetype {
 }
 
 function updateMockResult(base: TrialResult, caseData: Case): TrialResult {
-  if (base.source === "live") return base
+  // Only local mock/replay data is adapted to the current case. Anything the backend returned (live or its
+  // own fallback) must stay byte-for-byte, or later calls fail its previous_result check with a 409.
+  if (!/^(mock|replay)-/.test(base.request_id)) return base
   const demoTasks = {
     slides: caseData.tasks.find((task) => /slides|deck|pitch/i.test(task.title)),
     study: caseData.tasks.find((task) => /study|exam/i.test(task.title)),
@@ -151,13 +155,13 @@ function scriptFor(decision: Decision, rounds: number): Exchange[] {
       : decision.first_move ? `Give me ${decision.approved_min} minutes and I start right now: ${trim(decision.first_move)}.` : `Give me ${decision.approved_min} minutes and nothing more.`
     const prosecution = decision.cut_scope.length
       ? `Then this stays out today: ${decision.cut_scope.map(trim).join("; ")}.`
-      : decision.verdict === "APPROVED" ? "No further objection, as long as it stays inside its time." : `The record says it plainly: ${trim(decision.reason)}.`
+      : decision.verdict === "APPROVED" ? "No further objection, as long as it stays inside its time." : `The record says it plainly: ${trim(cleanReason(decision.reason))}.`
     script.push({ round: 2, speaker: "defense", text: defence }, { round: 2, speaker: "prosecution", text: prosecution })
   }
   if (rounds >= 3) {
     script.push(
       { round: 3, speaker: "defense", text: decision.done_when ? `And I stop the moment this is true: ${trim(decision.done_when)}.` : "I rest my case." },
-      { round: 3, speaker: "prosecution", text: `Final word for the court: ${trim(decision.reason)}.` },
+      { round: 3, speaker: "prosecution", text: `Final word for the court: ${trim(cleanReason(decision.reason))}.` },
     )
   }
   return script
@@ -240,14 +244,14 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
         {allSeated && <div className="empty-witness"><span>The room is in order.</span><span>{result.judge_summary}</span></div>}
       </div>
       <div className="prosecutor-area"><ProsecutorCharacter objecting={phase === "hit"} /><span>THE PROSECUTOR</span>{phase === "hit" && <strong>OBJECTION!</strong>}</div>
-      <AnimatePresence>{phase === "verdict" && activeDecision && !allSeated && <motion.div key={`verdict-${activeDecision.task_id}-${replayKey}`} className={`verdict-overlay ${verdictTone[activeDecision.verdict]}`} initial={{ opacity: 0, scale: 1.6, rotate: -8 }} animate={{ opacity: 1, scale: 1, rotate: -3 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ type: "spring", stiffness: 260, damping: 18 }}><small>THE COURT RULES · {activeDecision.effective_title}</small><strong>{activeDecision.verdict}</strong><span>{activeDecision.original_min} → {activeDecision.approved_min} min{activeDecision.saved_min > 0 ? ` · SAVED ${activeDecision.saved_min} MIN` : ""}</span><p>{activeDecision.reason}</p></motion.div>}</AnimatePresence>
+      <AnimatePresence>{phase === "verdict" && activeDecision && !allSeated && <motion.div key={`verdict-${activeDecision.task_id}-${replayKey}`} className={`verdict-overlay ${verdictTone[activeDecision.verdict]}`} initial={{ opacity: 0, scale: 1.6, rotate: -8 }} animate={{ opacity: 1, scale: 1, rotate: -3 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ type: "spring", stiffness: 260, damping: 18 }}><small>THE COURT RULES · {activeDecision.effective_title}</small><strong>{activeDecision.verdict}</strong><span>{activeDecision.original_min} → {activeDecision.approved_min} min{activeDecision.saved_min > 0 ? ` · SAVED ${activeDecision.saved_min} MIN` : ""}</span><p>{cleanReason(activeDecision.reason)}</p></motion.div>}</AnimatePresence>
       <div className="court-floor" />
       <div className="bench-row">{verdicts.map((verdict) => <section key={verdict} className={`court-bench ${verdictTone[verdict]}`}><header><strong>{verdict}</strong><span>{byVerdict(verdict).length} seated</span></header><div className="bench-seats">{byVerdict(verdict).map((decision) => {
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         if (!task) return null
         const activeMenu = menuTask === task.id
         const pardonAvailable = pardonsUsed < 2 && decision.verdict !== "APPROVED"
-        return <div className="seated-character" key={task.id}><TaskCharacter archetype={decision.persona.archetype} state={activeMenu ? "speaking" : "sitting"} prisonerNumber={result.decisions.findIndex((item) => item.task_id === task.id) + 1} variant={decision.verdict === "DISMISSED" ? "defendant" : "on-duty"} label={`Open actions for ${decision.effective_title}`} onClick={() => setMenuTask(activeMenu ? null : task.id)} /><span>{decision.effective_title}</span>{activeMenu && <div className="radial-menu"><button onClick={() => onCrossExamine(task.id)}>Cross-examine</button>{pardonAvailable && <button disabled={busy} onClick={() => { setMenuTask(null); onPardon(task.id) }}>Pardon ({2 - pardonsUsed} left)</button>}<button onClick={() => onCallJudge(task.id)}>Call the judge</button>{decision.verdict === "REDUCED" && <button onClick={() => onAppeal(task.id)}>Appeal</button>}</div>}</div>
+        return <div className="seated-character" key={task.id}><TaskCharacter archetype={decision.persona.archetype} state={activeMenu ? "speaking" : "sitting"} prisonerNumber={result.decisions.findIndex((item) => item.task_id === task.id) + 1} variant={decision.verdict === "DISMISSED" ? "defendant" : "on-duty"} label={`Open actions for ${decision.effective_title}`} onClick={() => setMenuTask(activeMenu ? null : task.id)} /><span>{decision.effective_title}</span>{activeMenu && <div className="radial-menu"><button onClick={() => onCrossExamine(task.id)}>Cross-examine</button>{pardonAvailable && <button disabled={busy} onClick={() => { setMenuTask(null); onPardon(task.id) }}>Pardon ({2 - pardonsUsed} left)</button>}{decision.verdict !== "DISMISSED" && <button onClick={() => onCallJudge(task.id)}>Call the judge</button>}{decision.verdict === "REDUCED" && <button onClick={() => onAppeal(task.id)}>Appeal</button>}</div>}</div>
       })}</div></section>)}</div>
       <div className="time-recovered"><span className="hourglass-icon">⌛</span><div><small>TIME RECOVERED</small><strong>{result.metrics.minutes_recovered}<em> min</em></strong></div><div className="jar-fill"><i style={{ height: `${Math.min(100, result.metrics.minutes_recovered / 1.8)}%` }} /></div></div>
       {relationTasks.length > 0 && <div className="relations-legend" aria-label="Task relationships">{relationTasks.map((relation) => <span key={`${relation.a?.id}-${relation.b?.id}`} className={`relation-${relation.type}`}>{relation.type === "ally" ? "🤝" : relation.type === "rival" ? "⚡" : "⛓"} {relation.a?.title} ↔ {relation.b?.title}</span>)}</div>}
@@ -354,7 +358,7 @@ function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onR
       })}</section>
       <div className="done-when-card"><span>DONE WHEN</span><p>{doneWhen}</p></div>
       <div className="mark-done-row">{doneMinutes !== null ? <span className="done-confirmation"><Check /> Done · took {doneMinutes} min</span> : showDuration ? <div className="actual-duration"><label htmlFor="actual-duration">How long did it really take?</label><input id="actual-duration" type="number" min="1" value={actual} onChange={(event) => setActual(event.target.value)} placeholder="Minutes" /><button onClick={() => { if (Number(actual) > 0) { setDoneMinutes(Number(actual)); setShowDuration(false) } }} disabled={Number(actual) <= 0}>Save actual</button></div> : <button className="mark-done-button" onClick={() => setShowDuration(true)}><Check /> Mark done</button>}</div>
-      <section className="call-judge-panel"><div className="judge-panel-head"><JudgeCharacter /><div><span className="new-eyebrow">CALL THE JUDGE</span><h3>Need a different order?</h3><p>Ask for a rewrite that fits real life.</p></div></div><div className="judge-presets">{presetsForTask.map((preset) => <button key={preset} className={lastAsked === preset ? "preset-asked" : ""} onClick={() => submitRevision(preset)}>{preset}</button>)}</div><form className="judge-instruction" onSubmit={(event) => { event.preventDefault(); submitRevision() }}><input value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Or tell the judge what needs to change…" /><button disabled={!instruction.trim()} aria-label="Send instruction"><Send /></button></form>{busy && <div className="judge-loading" role="status"><JudgeCharacter striking /><span>The judge is rewriting your order…</span></div>}{error && !busy && <p className="revision-error" role="alert">{error}</p>}{revision && !busy && !error && <p className="revision-success"><Check /> {lastAsked ? `Revised: “${lastAsked}”. The plan above is updated.` : "The detailed order is in."}</p>}</section>
+      {decision.verdict !== "DISMISSED" && <section className="call-judge-panel"><div className="judge-panel-head"><JudgeCharacter /><div><span className="new-eyebrow">CALL THE JUDGE</span><h3>Need a different order?</h3><p>Ask for a rewrite that fits real life.</p></div></div><div className="judge-presets">{presetsForTask.map((preset) => <button key={preset} className={lastAsked === preset ? "preset-asked" : ""} onClick={() => submitRevision(preset)}>{preset}</button>)}</div><form className="judge-instruction" onSubmit={(event) => { event.preventDefault(); submitRevision() }}><input value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Or tell the judge what needs to change…" /><button disabled={!instruction.trim()} aria-label="Send instruction"><Send /></button></form>{busy && <div className="judge-loading" role="status"><JudgeCharacter striking /><span>The judge is rewriting your order…</span></div>}{error && !busy && <p className="revision-error" role="alert">{error}</p>}{revision && !busy && !error && <p className="revision-success"><Check /> {lastAsked ? `Revised: “${lastAsked}”. The plan above is updated.` : "The detailed order is in."}</p>}</section>}
       <button className="order-cross-examine" onClick={onCrossExamine}>Cross-examine this task</button>
     </div>
   </motion.aside></div>
@@ -417,7 +421,8 @@ export default function TrialExperience() {
     finally { setBusy(false) }
   }
   const appealTask = async (fact: string) => {
-    if (!result || !currentTask) return
+    // The backend only re-sentences with an accepted plea; a bare fact would replay the same verdict.
+    if (!result || !currentTask || !crossAnswer?.proposal) return
     setBusy(true)
     try {
       const updated = await appeal({ case: caseData, task_id: currentTask.id, new_fact: fact.trim() || null, accepted_replacement: crossAnswer?.proposal ?? null, previous_result: result, base_revision: result.revision })
@@ -471,6 +476,8 @@ export default function TrialExperience() {
   }
   useEffect(() => {
     if (!orderTaskId || !result || requestedRevision.current === orderTaskId) return
+    // A dismissed task has no plan to detail: the backend answers 422 until it is pardoned or appealed.
+    if (result.decisions.find((decision) => decision.task_id === orderTaskId)?.verdict === "DISMISSED") return
     requestedRevision.current = orderTaskId
     void askJudge(orderTaskId, "detail")
     // eslint-disable-next-line react-hooks/exhaustive-deps
