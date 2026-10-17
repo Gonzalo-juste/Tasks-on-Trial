@@ -23,6 +23,8 @@ suggest the need and let the user accept a replacement through interrogation and
 The court order IS the product. For accepted work provide 1-4 SPECIFIC steps with positive integer
 minutes adding exactly to approved_min. A first_move is a physical action under 2 minutes;
 done_when is a checkable finish line; cut_scope says what is omitted and where it goes.
+Keep numeric time durations in the minutes fields, not in step labels, first_move or
+done_when, because Python may rebalance the approved time budget.
 Do not invent postponement dates: say backlog unless the user supplied a date.
 Do not schedule or calculate recovered time. Python does that. Do not emit reasoning, prompts,
 secrets or analysis. Return only the final JSON matching the schema.

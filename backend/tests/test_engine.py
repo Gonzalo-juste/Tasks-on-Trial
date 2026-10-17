@@ -142,3 +142,17 @@ def test_semantic_input_errors(trial_request,kind):
     if kind == 'offset':case.constitution.timezone='America/New_York'
     with pytest.raises(ApiError) as caught:validate_case(case)
     assert caught.value.fields
+
+
+def test_approved_with_shorter_proposed_minutes_drops_stale_court_order(trial_request):
+    task=trial_request.case.tasks[1]
+    r=Recommendation(task_id=task.id,defense='A shorter visit',prosecution='Needs evidence',
+        recommendation='APPROVED',approved_min=30,effective_title='Short gym visit',
+        first_move='Start a 30-minute workout',action_plan=[PlanStep(step='Train for 30 minutes',minutes=30)],
+        done_when='30 minutes completed')
+    d=decide(task,r)
+    assert d.verdict=='APPROVED' and d.approved_min==60
+    assert d.action_plan[0].minutes==60
+    assert '30' not in d.action_plan[0].step
+    assert '30' not in d.first_move and '30' not in d.done_when
+    assert d.effective_title==task.title

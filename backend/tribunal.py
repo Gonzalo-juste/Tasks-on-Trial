@@ -68,6 +68,9 @@ def decide(task: Task, r: Recommendation) -> Decision:
                 reason = f'Authorised smaller scope based on your fact: {r.fact_cited}'[:500]
     else:
         reason = 'Confirmed scope and duration retained.'
+        if r.approved_min != task.duration_min:
+            adjusted = False
+            reason = 'Proposed minutes contradicted the approval; confirmed scope and duration retained.'
     title = r.effective_title if adjusted and verdict == 'REDUCED' else task.title
     useful = r if adjusted else fallback_recommendation(task)
     need = r.suggested_need.model_copy(update={'status':'unconfirmed'}) if r.suggested_need else None
