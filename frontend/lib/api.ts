@@ -18,6 +18,8 @@ export interface AppealInput {
   task_id: string
   new_fact: string | null
   accepted_replacement: Proposal | null
+  /** A pact: these tasks are folded into the appealed task (backend 9381b76). */
+  merge_task_ids?: string[]
   previous_result: TrialResult
   base_revision: number
 }

@@ -9,11 +9,59 @@ import { FocusRoom } from "@/components/focus-room"
 import { appeal, interrogate, run, runReplay } from "@/lib/api"
 import { pardon, revise, type PardonInput } from "@/lib/api-extra"
 import { demoCase } from "@/lib/mocks"
-import type { Archetype, Case, Decision, InitResult, InterrogationResult, QuestionType, ReviseResult, Task, TrialResult, Verdict } from "@/lib/types"
+import type { Archetype, Case, Decision, InitResult, InterrogationResult, Proposal, QuestionType, ReviseResult, Task, TrialResult, Verdict } from "@/lib/types"
 
 const verdictTone: Record<Verdict, string> = { APPROVED: "approved", REDUCED: "reduced", DISMISSED: "dismissed" }
 /** Display only: drop engine codes like "not_proven: " (the raw reason must go back to the backend unchanged). */
 const cleanReason = (reason: string) => reason.replace(/^[a-z_]+:\s*/, "")
+// Questions that make sense for where the task ended up: no "why so long?" to a task that got zero minutes.
+const QUESTIONS_BY_VERDICT: Record<Verdict, { label: string; type: QuestionType; text?: string }[]> = {
+  APPROVED: [
+    { label: "Why do you deserve all of it?", type: "purpose" },
+    { label: "Could you be done sooner?", type: "why_so_long" },
+    { label: "What's your smallest version?", type: "minimal" },
+  ],
+  REDUCED: [
+    { label: "Is the shorter version enough?", type: "free", text: "Is your reduced version really enough to do the job today? Be honest." },
+    { label: "What did you have to cut?", type: "free", text: "What exactly did you lose in the reduction, and does it matter today?" },
+    { label: "Why should you get more time?", type: "purpose" },
+  ],
+  DISMISSED: [
+    { label: "What are you really for?", type: "purpose" },
+    { label: "Why should you come back today?", type: "why_today" },
+    { label: "What's the smallest version of you?", type: "minimal" },
+  ],
+}
+/** Two compatible tasks join forces: a dismissed task folds into an ally that the court kept. */
+interface Pact { allyId: string; allyTitle: string; pitch: string; proposal: Proposal }
+
+function buildPact(dismissed: Decision, tasks: Task[], decisions: Decision[]): Pact | null {
+  if (dismissed.verdict !== "DISMISSED") return null
+  const gymTask = tasks.find((task) => task.id === dismissed.task_id)
+  if (!gymTask || archetypeForTask(gymTask) !== "dumbbell") return null
+  const ally = decisions.find((decision) => decision.verdict !== "DISMISSED" && tasks.some((task) => task.id === decision.task_id && archetypeForTask(task) === "runner"))
+  const allyTask = ally && tasks.find((task) => task.id === ally.task_id)
+  if (!ally || !allyTask) return null
+  // The pact takes the gym's confirmed time (no increase): 1/3 running to the gym, 2/3 strength.
+  const minutes = gymTask.duration_min
+  const run = Math.max(5, Math.round(minutes / 3))
+  return {
+    allyId: ally.task_id,
+    allyTitle: allyTask.title,
+    pitch: `"We're both here for your health. Let me run you to the gym: the run replaces the ${gymTask.buffer_min || 20}-minute commute, and you still train. Two tasks, one ${minutes}-minute session."`,
+    proposal: {
+      title: "Run to the gym + strength circuit",
+      duration_min: minutes,
+      need: "health",
+      saved_min: 0,
+      cut_scope: [`The ${gymTask.buffer_min || 20}-minute commute (you run there instead)`, "A separate gym session"],
+      first_move: "Put on your running shoes and head for the gym.",
+      action_plan: [{ step: "Run to the gym", minutes: run }, { step: "Strength circuit at the gym", minutes: minutes - run }],
+      done_when: "You ran there and finished the circuit.",
+    },
+  }
+}
+
 const CROSS_QUESTIONS: Partial<Record<QuestionType, string>> = {
   purpose: "What are you really for, and why should you get time today?",
   why_so_long: "Why do you need that much time? Break yourself into steps.",
@@ -208,7 +256,7 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
   const currentExchange = activeDecision ? scriptFor(activeDecision, rounds)[exchangeIndex] : undefined
   const relationTasks = useMemo(() => relations.map((relation) => ({ ...relation, a: caseData.tasks.find((task) => task.id === relation.a), b: caseData.tasks.find((task) => task.id === relation.b) })).filter((relation) => relation.a && relation.b), [relations, caseData.tasks])
   const fixedMinutes = caseData.constitution.fixed_blocks.reduce((total, block) => total + Math.max(0, minutes(block.end) - minutes(block.start)), 0)
-  const courtBudget = Math.max(0, minutes(caseData.constitution.end) - minutes(caseData.constitution.start) - fixedMinutes)
+  const courtBudget = caseData.budget_min ?? Math.max(0, minutes(caseData.constitution.end) - minutes(caseData.constitution.start) - fixedMinutes)
   const replayKey = replay?.key ?? 0
   // One defendant at a time, so a single testimony can be skipped without touching the others.
   const orderRef = useRef<number[]>([])
@@ -413,11 +461,12 @@ function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onR
   </motion.aside></div>
 }
 
-function CrossExamination({ task, decision, busy, answer, onAsk, onAppeal, onClose }: {
-  task: Task; decision?: Decision; busy: boolean; answer: InterrogationResult | null; onAsk: (type: QuestionType) => void; onAppeal: (fact: string) => void; onClose: () => void
+function CrossExamination({ task, decision, busy, answer, onAsk, onAppeal, onClose, pact, onPact }: {
+  task: Task; decision?: Decision; busy: boolean; answer: InterrogationResult | null; onAsk: (type: QuestionType, text?: string) => void; onAppeal: (fact: string) => void; onClose: () => void
+  pact?: Pact | null; onPact?: () => void
 }) {
   const [fact, setFact] = useState("")
-  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{(["purpose", "why_so_long", "why_today"] as QuestionType[]).map((type) => <button key={type} disabled={busy} onClick={() => onAsk(type)}>{type === "purpose" ? "What are you for?" : type === "why_so_long" ? "Why so long?" : "Why today?"}<ArrowRight /></button>)}</div>{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{witnessLine(answer)}</p>{answer.proposal && <div className="cross-plea"><strong>🤝 Plea deal offered: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
+  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{QUESTIONS_BY_VERDICT[decision?.verdict ?? "APPROVED"].map((question) => <button key={question.label} disabled={busy} onClick={() => onAsk(question.type, question.text)}>{question.label}<ArrowRight /></button>)}</div>{pact && answer && <motion.div className="pact-card" initial={{ opacity: 0, y: 10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}><span>🤝 {pact.allyTitle.toUpperCase()} STEPS FORWARD WITH A PACT</span><strong>{pact.proposal.title}</strong><p>{pact.pitch}</p><ol>{pact.proposal.action_plan.map((step: { step: string; minutes: number }) => <li key={step.step}>{step.step} · {step.minutes} min</li>)}</ol><small>Not today: {pact.proposal.cut_scope.join(" · ")}</small><button disabled={busy} onClick={onPact}>Accept the pact — let the judge rule</button></motion.div>}{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{witnessLine(answer)}</p>{answer.proposal && <div className="cross-plea"><strong>🤝 Plea deal offered: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
 }
 
 export default function TrialExperience() {
@@ -480,14 +529,14 @@ export default function TrialExperience() {
   }
 
   const openCross = (id: string) => { setCrossTaskId(id); setCrossAnswer(null) }
-  const askCross = async (type: QuestionType) => {
+  const askCross = async (type: QuestionType, text?: string) => {
     if (!result || !currentTask || busy) return
     setBusy(true)
     try {
       const base = { case: trialCase(), task_id: currentTask.id, previous_result: result, base_revision: result.revision }
       // Typed questions carry the plea logic but often come back as a bare "No comment." for tasks without facts.
       // In that case ask the same thing as a free question so the witness actually answers in character.
-      const response = await interrogate({ ...base, question_type: type, question_text: null })
+      const response = await interrogate({ ...base, question_type: text ? "free" : type, question_text: text ?? null })
       if (/^\s*no comment\.?\s*$/i.test(response.answer)) {
         try {
           const spoken = await interrogate({ ...base, question_type: "free", question_text: `${CROSS_QUESTIONS[type] ?? "Explain yourself."} Answer in character in one or two sentences; if you have no evidence, admit it but still answer.` })
@@ -537,6 +586,46 @@ export default function TrialExperience() {
       setStage("courtroom")
       setPardonIds((previous) => [...previous, id])
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The pardon could not be granted.") }
+    finally { setBusy(false); setDeliberating(null) }
+  }
+  // Dismissed task id -> the ally it merged into through a pact (display only; the backend judged the ally's appeal).
+  const [mergedInto, setMergedInto] = useState<Record<string, string>>({})
+  const pactFor = (taskId: string | null) => {
+    const decision = result?.decisions.find((item) => item.task_id === taskId)
+    return decision && !mergedInto[decision.task_id] ? buildPact(decision, caseData.tasks, result?.decisions ?? []) : null
+  }
+  const acceptPact = async (taskId: string | null) => {
+    const pact = pactFor(taskId)
+    if (!result || !pact || !taskId) return
+    const gymTitle = caseData.tasks.find((task) => task.id === taskId)?.title ?? "The defendant"
+    setBusy(true)
+    setCrossTaskId(null)
+    setStage("courtroom")
+    setDeliberating(`Pact: ${gymTitle} + ${pact.allyTitle}`)
+    try {
+      // The dismissed task takes the pact; its ally is merged into it and the commute buffer goes to zero.
+      const send = (proposal: Proposal) => appeal({
+        case: trialCase(), task_id: taskId,
+        new_fact: `${gymTitle} and ${pact.allyTitle} agreed a pact: running to the gym replaces the commute, so both are served in one session.`,
+        accepted_replacement: { ...proposal, buffer_min: 0 }, merge_task_ids: [pact.allyId],
+        previous_result: result, base_revision: result.revision,
+      })
+      let updated: TrialResult
+      try {
+        updated = await send(pact.proposal)
+      } catch (cause) {
+        // The backend may require a strictly smaller replacement: offer the same pact five minutes shorter.
+        if (!(cause instanceof Error) || !/smaller/i.test(cause.message)) throw cause
+        const minutes = pact.proposal.duration_min - 5
+        const run = pact.proposal.action_plan[0].minutes
+        updated = await send({ ...pact.proposal, duration_min: minutes, action_plan: [{ step: "Run to the gym", minutes: run }, { step: "Strength circuit at the gym", minutes: minutes - run }] })
+      }
+      setResult(updated)
+      setMergedInto((current) => ({ ...current, [taskId]: pact.allyId, [pact.allyId]: taskId }))
+      setReplay({ taskId, key: Date.now() })
+      setSeenTrialId(updated.request_id)
+      setStage("courtroom")
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "The court could not hear the pact.") }
     finally { setBusy(false); setDeliberating(null) }
   }
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null)
@@ -606,7 +695,7 @@ export default function TrialExperience() {
       {error && <div className="court-error global-error" role="alert"><span>{error}</span>{/restarted/i.test(error) && <button onClick={() => void reconvene()}>Reconvene the court</button>}<button onClick={() => setError("")}>Dismiss</button></div>}
       <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} onStart={startFocus} pardonIds={pardonIds} activeTaskId={activeTaskId} /></motion.div>}</AnimatePresence>
     </main><footer className="new-footer"><span>THE COURT OF A REASONABLE DAY</span><span>Nothing earns time by default.</span></footer>
-    {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} />}
+    {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} pact={pactFor(crossTaskId)} onPact={() => void acceptPact(crossTaskId)} />}
     {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} onStart={() => { setOrderTaskId(null); startFocus(orderTask.id) }} />}
     <AnimatePresence>{deliberating && <motion.div className="deliberation-overlay" role="status" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><JudgeCharacter striking /><strong>The court is deliberating…</strong><span>{deliberating}</span></motion.div>}</AnimatePresence>
     {focusTask && focusDecision && <FocusRoom key={focusTask.id} task={focusTask} decision={focusDecision} archetype={artFor(focusDecision, caseData.tasks)} slot={result?.schedule.find((slot) => slot.task_id === focusTask.id)}
