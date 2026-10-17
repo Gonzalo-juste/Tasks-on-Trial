@@ -133,3 +133,5 @@
 .ahem-bubble{position:absolute;top:-28px;right:-30px;z-index:8;padding:3px 8px;color:#1f2f38;border:2px solid #e2c27a;border-radius:12px;background:#fffaf0;box-shadow:0 4px 10px #0005;font:800 12px var(--font-court-sans),Arial,sans-serif;transform-origin:bottom left}
 .skip-verdict.skip-one{color:#1f3442;border-color:#c9a45c;background:#f6ecd2}
 .court-controls{display:flex;flex-wrap:wrap;gap:8px}
+.cross-plea{border:2px solid #c9a45c!important;background:#fff8e6!important;box-shadow:0 0 0 4px #c9a45c22;animation:plea-in .4s cubic-bezier(.2,1.4,.4,1)}
+@keyframes plea-in{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}

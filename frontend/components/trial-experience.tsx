@@ -13,6 +13,14 @@ import type { Archetype, Case, Decision, InitResult, InterrogationResult, Questi
 const verdictTone: Record<Verdict, string> = { APPROVED: "approved", REDUCED: "reduced", DISMISSED: "dismissed" }
 /** Display only: drop engine codes like "not_proven: " (the raw reason must go back to the backend unchanged). */
 const cleanReason = (reason: string) => reason.replace(/^[a-z_]+:\s*/, "")
+/** A bare "No comment." reads like a bug. Keep it, and let the witness point at its plea (no new facts are invented). */
+const witnessLine = (answer: InterrogationResult) => {
+  const text = answer.answer.trim()
+  if (!/^no comment\.?$/i.test(text)) return text
+  return answer.proposal
+    ? `“No comment.” …A long pause. “But I could offer the court a deal: ${answer.proposal.title.toLowerCase()}, ${answer.proposal.duration_min} minutes.”`
+    : "“No comment.” The witness has no evidence on record for that question."
+}
 
 function emptyCase(): Case {
   const data = structuredClone(demoCase)
@@ -394,7 +402,7 @@ function CrossExamination({ task, decision, busy, answer, onAsk, onAppeal, onClo
   task: Task; decision?: Decision; busy: boolean; answer: InterrogationResult | null; onAsk: (type: QuestionType) => void; onAppeal: (fact: string) => void; onClose: () => void
 }) {
   const [fact, setFact] = useState("")
-  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{(["purpose", "why_so_long", "why_today"] as QuestionType[]).map((type) => <button key={type} disabled={busy} onClick={() => onAsk(type)}>{type === "purpose" ? "What are you for?" : type === "why_so_long" ? "Why so long?" : "Why today?"}<ArrowRight /></button>)}</div>{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{answer.answer}</p>{answer.proposal && <div className="cross-plea"><strong>Possible plea: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
+  return <div className="order-overlay cross-exam-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="cross-exam-card" role="dialog" aria-modal="true" aria-labelledby="cross-exam-title"><button className="order-close" onClick={onClose} aria-label="Close cross-examination"><X /></button><span className="new-eyebrow">THE WITNESS STAND</span><h2 id="cross-exam-title">Cross-examine {decision?.effective_title ?? task.title}</h2><p>One careful question can make room for a more reasonable plea.</p><div className="cross-question-list">{(["purpose", "why_so_long", "why_today"] as QuestionType[]).map((type) => <button key={type} disabled={busy} onClick={() => onAsk(type)}>{type === "purpose" ? "What are you for?" : type === "why_so_long" ? "Why so long?" : "Why today?"}<ArrowRight /></button>)}</div>{answer && <div className="cross-answer"><span>THE WITNESS ANSWERS</span><p>{witnessLine(answer)}</p>{answer.proposal && <div className="cross-plea"><strong>🤝 Plea deal offered: {answer.proposal.title} · {answer.proposal.duration_min} min</strong><p>{answer.proposal.first_move}</p><input value={fact} onChange={(event) => setFact(event.target.value)} placeholder="Add a new fact (optional)" /><button onClick={() => onAppeal(fact)}>Accept appeal</button></div>}</div>}</section></div>
 }
 
 export default function TrialExperience() {
@@ -412,6 +420,9 @@ export default function TrialExperience() {
   const [orderTaskId, setOrderTaskId] = useState<string | null>(null)
   const [revision, setRevision] = useState<ReviseResult | null>(null)
   const [replay, setReplay] = useState<{ taskId: string; key: number } | null>(null)
+  // The exact case the court judged. Later calls must send it unchanged, even if the docket is edited afterwards.
+  const trialCaseRef = useRef<Case | null>(null)
+  const trialCase = () => trialCaseRef.current ?? caseData
   const [seenTrialId, setSeenTrialId] = useState<string | null>(null)
   const [replayAllKey, setReplayAllKey] = useState(0)
   const requestedRevision = useRef<string | null>(null)
@@ -425,6 +436,7 @@ export default function TrialExperience() {
     setError("")
     try {
       const currentCase = { ...caseData, rules: { ...caseData.rules } }
+      trialCaseRef.current = currentCase
       const rawResult = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_USE_MOCK === "true" ? await run(currentCase) : await runReplay()
       const response = updateMockResult(rawResult, currentCase)
       setResult(response)
@@ -441,7 +453,7 @@ export default function TrialExperience() {
     if (!result || !currentTask || busy) return
     setBusy(true)
     try {
-      const response = await interrogate({ case: caseData, task_id: currentTask.id, question_type: type, question_text: null, previous_result: result, base_revision: result.revision })
+      const response = await interrogate({ case: trialCase(), task_id: currentTask.id, question_type: type, question_text: null, previous_result: result, base_revision: result.revision })
       setCrossAnswer(response)
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The witness could not be heard.") }
     finally { setBusy(false) }
@@ -451,7 +463,7 @@ export default function TrialExperience() {
     if (!result || !currentTask || !crossAnswer?.proposal) return
     setBusy(true)
     try {
-      const updated = await appeal({ case: caseData, task_id: currentTask.id, new_fact: fact.trim() || null, accepted_replacement: crossAnswer?.proposal ?? null, previous_result: result, base_revision: result.revision })
+      const updated = await appeal({ case: trialCase(), task_id: currentTask.id, new_fact: fact.trim() || null, accepted_replacement: crossAnswer?.proposal ?? null, previous_result: result, base_revision: result.revision })
       setResult(updated)
       setCrossTaskId(null)
       setCrossAnswer(null)
@@ -466,7 +478,7 @@ export default function TrialExperience() {
     if (!result || pardonIds.length >= 2) return
     setBusy(true)
     try {
-      const input: PardonInput = { case: caseData, task_id: id, previous_result: result, base_revision: result.revision, pardon: true }
+      const input: PardonInput = { case: trialCase(), task_id: id, previous_result: result, base_revision: result.revision, pardon: true }
       const updated = await pardon(input)
       setResult(updated)
       setReplay({ taskId: id, key: Date.now() })
@@ -492,7 +504,7 @@ export default function TrialExperience() {
     setReviseBusy(true)
     setReviseError("")
     try {
-      const response = await revise({ case: caseData, task_id: taskId, instruction, previous_result: result, base_revision: result.revision })
+      const response = await revise({ case: trialCase(), task_id: taskId, instruction, previous_result: result, base_revision: result.revision })
       if (ticket === reviseTicket.current) setRevision(response)
     } catch (cause) {
       if (ticket === reviseTicket.current) setReviseError(cause instanceof Error ? cause.message : "The judge could not revise this order.")

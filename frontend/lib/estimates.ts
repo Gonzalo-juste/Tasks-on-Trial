@@ -63,8 +63,8 @@ export const CHAOTIC_DAY = [
 
 export const MAX_TASKS = 6
 
-// Only explicit words make a task non-negotiable. "Exam tomorrow" is context, not an obligation to study today.
-const MANDATORY_WORDS = /\b(must|have to|has to|mandatory|non-negotiable|required|promised)\b/i
+// Explicit obligations make a task non-negotiable. For the demo, exam preparation is treated as one too.
+const MANDATORY_WORDS = /\b(must|have to|has to|mandatory|non-negotiable|required|promised|exams?)\b/i
 const CONTEXT_WORDS = /\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|exam|deadline|interview|appointment)\b/i
 const DEADLINE_TIME = /\b(?:by|before|until|due(?:\s+(?:at|by))?)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i
 const BUFFER = /\+\s*(\d+)\s*(?:m|min|mins|minutes?)\b(?:\s+(?:of\s+)?(?:travel|commute|setup|getting there))?/i
