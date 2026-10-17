@@ -1,7 +1,11 @@
 # Tasks on Trial backend
 
-Python/FastAPI backend for the shared Tasks on Trial v3 contract. All implementation
+Python/FastAPI backend with v4 additions and compatibility with the shared v3 contract. All implementation
 and test files live in `backend/`. Frontend files and `main` are not changed.
+
+See [CONTRACT_V4.md](CONTRACT_V4.md) for `/init`, detailed `/revise`, buffers,
+archetypes, pardons and rules. The original replay fixtures remain v3. The 375-minute
+v4 demo is tested locally; a new shared replay fixture set is still needed from Carlos.
 
 ## Start locally
 

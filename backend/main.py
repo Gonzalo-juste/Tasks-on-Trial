@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from .config import Settings
 from .errors import ApiError
-from .schemas import RunRequest, TrialResult, InterrogateRequest, InterrogateResult, AppealRequest
+from .schemas import (RunRequest, TrialResult, InterrogateRequest, InterrogateResult,
+                      AppealRequest, InitRequest, InitResult, ReviseRequest, ReviseResult)
 from .service import TrialService
 
 logger = logging.getLogger('uvicorn.error.tribunal')
@@ -57,6 +58,14 @@ def health():
 @app.post('/api/trial/run',response_model=TrialResult)
 async def run_trial(body: RunRequest):
     return await app.state.service.run(body)
+
+@app.post('/api/trial/init', response_model=InitResult)
+async def init_trial(body: InitRequest):
+    return await app.state.service.init(body)
+
+@app.post('/api/trial/revise', response_model=ReviseResult)
+async def revise_trial(body: ReviseRequest):
+    return await app.state.service.revise(body)
 
 @app.post('/api/trial/interrogate',response_model=InterrogateResult)
 async def interrogate(body: InterrogateRequest):

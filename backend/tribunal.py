@@ -3,6 +3,7 @@ from .schemas import (Task, Case, Decision, Persona, PlanStep, Release, Need, Re
                        RunProposal, TrialResult, Meta, Replacement, Proposal)
 from .scheduler import plan
 from .validation import verify_result
+from .presentation import character, natural_language
 
 
 def normalize_plan(steps: list[PlanStep], minutes: int, title: str) -> list[PlanStep]:
@@ -33,7 +34,7 @@ def consistent_order(steps: list[PlanStep], minutes: int, title: str,
 
 
 def fallback_recommendation(task: Task) -> Recommendation:
-    return Recommendation(task_id=task.id, persona=Persona(),
+    return Recommendation(task_id=task.id, persona=character(task),
         defense=f'I request the confirmed {task.duration_min} minutes for {task.title}.'[:240],
         prosecution='No live assessment is available. The court preserves your confirmed scope.',
         recommendation='APPROVED', approved_min=task.duration_min,
@@ -89,7 +90,13 @@ def decide(task: Task, r: Recommendation) -> Decision:
     first_move, action_plan, done_when = (None, [], None) if dismissed else consistent_order(
         useful.action_plan, minutes, title, useful.first_move, useful.done_when,
         proposed_min=useful.approved_min)
-    return Decision(task_id=task.id, persona=r.persona, defense=r.defense, prosecution=r.prosecution,
+    persona = r.persona.model_copy(deep=True)
+    default = character(task)
+    if persona.name == 'The Task Advocate':
+        persona = default
+    elif persona.archetype is None:
+        persona.archetype = default.archetype
+    return Decision(task_id=task.id, persona=persona, defense=natural_language(r.defense), prosecution=natural_language(r.prosecution),
         verdict=verdict, original_min=task.duration_min, approved_min=minutes,
         saved_min=task.duration_min-minutes, effective_title=title, reason=reason,
         cut_scope=r.cut_scope if adjusted and verdict != 'APPROVED' else [],
@@ -106,6 +113,11 @@ def build_result(case: Case, proposal: RunProposal | None, request_id: str, sour
             validate_proposal(case, proposal)
         by_id = {r.task_id:r for r in proposal.decisions} if proposal else {}
         decisions = [decide(t, by_id.get(t.id) or fallback_recommendation(t)) for t in case.tasks]
+        names = set()
+        for task, decision in zip(case.tasks, decisions):
+            if decision.persona.name.casefold() in names:
+                decision.persona = character(task)
+            names.add(decision.persona.name.casefold())
     schedule, metrics, conflicts = plan(case, decisions, categories)
     counts = {v:sum(d.verdict == v for d in decisions) for v in ['APPROVED','REDUCED','DISMISSED']}
     if conflicts:
@@ -136,6 +148,7 @@ def accepted_decision(task: Task, old: Decision, replacement: Replacement) -> De
     first_move, action_plan, done_when = consistent_order(
         steps, minutes, replacement.title, replacement.first_move, replacement.done_when)
     return old.model_copy(update={
+        'defense':natural_language(old.defense), 'prosecution':natural_language(old.prosecution),
         'verdict':'REDUCED' if minutes < task.duration_min else 'APPROVED',
         'approved_min':minutes, 'saved_min':task.duration_min-minutes,
         'effective_title':replacement.title,

@@ -22,6 +22,7 @@ class Session:
     run_signature: str
     created: float = field(default_factory=monotonic)
     facts: dict[str, list[str]] = field(default_factory=dict)
+    pardons_used: int = 0
 
 class StateStore:
     def __init__(self, limit=256, ttl=7200):

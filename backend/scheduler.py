@@ -61,7 +61,7 @@ def plan(case: Case, decisions: list[Decision], categories=None):
         else:
             earliest = max([case.constitution.start.astimezone(timezone.utc)] +
                            [scheduled[dep].end.astimezone(timezone.utc) for dep in task.depends_on])
-            duration = timedelta(minutes=d.approved_min)
+            duration = timedelta(minutes=d.approved_min + task.buffer_min)
             fits_without_deadline = False
             for i, (left, right) in enumerate(free):
                 begin = max(left, earliest)
@@ -71,7 +71,7 @@ def plan(case: Case, decisions: list[Decision], categories=None):
                 fits_without_deadline = True
                 if task.deadline is not None and finish > task.deadline:
                     continue
-                scheduled[task.id] = ScheduleSlot(task_id=task.id, start=begin.astimezone(zone), end=finish.astimezone(zone))
+                scheduled[task.id] = ScheduleSlot(task_id=task.id, start=begin.astimezone(zone), end=finish.astimezone(zone), buffer_min=task.buffer_min)
                 replacement = []
                 if left < begin:
                     replacement.append((left, begin))
@@ -92,7 +92,7 @@ def plan(case: Case, decisions: list[Decision], categories=None):
     metrics = Metrics(original_min=original, approved_min=approved,
         minutes_recovered=original-approved,
         pending_min=sum(d.approved_min for d in decisions if d.schedule_status == 'PENDING'),
-        free_capacity_min=usable-sum(d.approved_min for d in decisions if d.schedule_status == 'SCHEDULED'))
+        free_capacity_min=usable-sum(d.approved_min + tasks[d.task_id].buffer_min for d in decisions if d.schedule_status == 'SCHEDULED'))
     return schedule, metrics, conflicts
 
 
@@ -113,7 +113,9 @@ def verify_schedule(case: Case, decisions: list[Decision], schedule: list[Schedu
         if previous_end and slot.start < previous_end:
             raise ValueError('Schedule overlap.')
         previous_end = slot.end
-        if int((slot.end-slot.start).total_seconds()) != decision.approved_min*60:
+        if slot.buffer_min != task.buffer_min:
+            raise ValueError('Scheduled buffer does not match task.')
+        if int((slot.end-slot.start).total_seconds()) != (decision.approved_min+task.buffer_min)*60:
             raise ValueError('Scheduled minutes do not match decision.')
         if task.deadline and slot.end > task.deadline:
             raise ValueError('Deadline violated.')

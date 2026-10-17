@@ -37,7 +37,7 @@ def verify_result(case: Case, result: TrialResult) -> None:
     original = sum(t.duration_min for t in case.tasks)
     approved = sum(d.approved_min for d in result.decisions)
     usable = sum(int((end-start).total_seconds()//60) for start,end in free_intervals(case))
-    scheduled = sum(d.approved_min for d in result.decisions if d.schedule_status == 'SCHEDULED')
+    scheduled = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions if d.schedule_status == 'SCHEDULED')
     pending = sum(d.approved_min for d in result.decisions if d.schedule_status == 'PENDING')
     expected = (original,approved,original-approved,pending,usable-scheduled)
     observed = (m.original_min,m.approved_min,m.minutes_recovered,m.pending_min,m.free_capacity_min)

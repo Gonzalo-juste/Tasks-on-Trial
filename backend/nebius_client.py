@@ -7,8 +7,8 @@ from typing import TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 from .config import Settings
-from .prompts import RUN_SYSTEM, INTERROGATE_SYSTEM
-from .schemas import Case, RunProposal, InterrogationProposal, Meta
+from .prompts import RUN_SYSTEM, INTERROGATE_SYSTEM, INIT_SYSTEM, REVISE_SYSTEM
+from .schemas import Case, RunProposal, InterrogationProposal, Meta, InitDraft, RevisedOrder
 
 logger = logging.getLogger('uvicorn.error.provider')
 T = TypeVar('T', bound=BaseModel)
@@ -23,7 +23,7 @@ class NebiusClient:
         self.settings = settings
         self.transport = transport
 
-    async def generate(self, system: str, payload: dict, schema: type[T], validate=None) -> tuple[T, Meta]:
+    async def generate(self, system: str, payload: dict, schema: type[T], validate=None, temperature=0.2) -> tuple[T, Meta]:
         s = self.settings
         if not s.api_key or not s.model:
             raise ProviderFailure('not_configured', model=s.model or None)
@@ -45,7 +45,7 @@ class NebiusClient:
                         body = {'model':s.model, 'messages':[
                             {'role':'system', 'content':system+'\nJSON schema:\n'+json.dumps(schema.model_json_schema())},
                             {'role':'user', 'content':json.dumps(payload, ensure_ascii=False)}],
-                            'response_format':response_spec, 'temperature':0.2, 'max_tokens':6000}
+                            'response_format':response_spec, 'temperature':temperature, 'max_tokens':6000}
                         # Verified provider-specific control for direct structured output:
                         # https://github.com/nebius/nebius-physical-ai/blob/main/docs/workbench/token-factory-deprecation-verification.md
                         if s.model == 'nvidia/Nemotron-3_5-Lightning':
@@ -92,7 +92,25 @@ class NebiusClient:
         if target_id:
             payload.update(target_id=target_id, new_fact=new_fact,
                            accepted_replacement=replacement.model_dump(mode='json') if replacement else None)
-        return await self.generate(RUN_SYSTEM, payload, RunProposal, validate)
+        return await self.generate(RUN_SYSTEM, payload, RunProposal, validate, temperature=0)
+
+    async def init(self, request):
+        from .intake import prepare
+        from .errors import ApiError
+        def validate(draft):
+            try:
+                prepare(request, draft)
+            except ApiError as exc:
+                raise ValueError('Invalid intake case.') from exc
+        return await self.generate(INIT_SYSTEM, request.model_dump(mode='json'), InitDraft, validate, temperature=0)
+
+    async def revise(self, task, decision, instruction):
+        def validate(order):
+            if sum(step.minutes for step in order.action_plan) != decision.approved_min:
+                raise ValueError('Revised plan changed the approved budget.')
+        return await self.generate(REVISE_SYSTEM, {
+            'task':task.model_dump(mode='json'), 'decision':decision.model_dump(mode='json'),
+            'instruction':instruction}, RevisedOrder, validate, temperature=0)
 
     async def interrogate(self, task, decision, question_type, question_text):
         return await self.generate(INTERROGATE_SYSTEM, {

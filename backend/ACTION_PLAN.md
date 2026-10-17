@@ -1,5 +1,12 @@
 # Three-hour backend delivery plan
 
+> Carlos's round-2 v4 update now supersedes the original Tier-3 status of /init
+> and the full-result /revise design below. See CONTRACT_V4.md for the implemented
+> intake, buffers, archetypes, pardons, light detailed-plan response and rules.
+> Legacy replay fixtures are preserved until Carlos publishes the v4 fixture set.
+> Round-2 implementation passes 129 local tests. No new live inference validation
+> has been performed; frontend integration and rich-plan latency remain to check.
+
 Start around 10:50 UK time, 17 October 2026; target completion around 13:50.
 The partner's final feature freeze remains 15:30, with product and pitch due at 16:00.
 

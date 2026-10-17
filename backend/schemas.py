@@ -26,6 +26,7 @@ class Task(Model):
     category: Category = 'other'
     allow_reduction: Annotated[bool, Field(strict=True)] = False
     facts: Annotated[list[Text], Field(max_length=12)] = []
+    buffer_min: Annotated[StrictInt, Field(ge=0, le=1440, exclude_if=lambda v: v == 0)] = 0
 
 class FixedBlock(Model):
     start: AwareDatetime
@@ -39,9 +40,22 @@ class Constitution(Model):
     fixed_blocks: Annotated[list[FixedBlock], Field(max_length=24)] = []
     priorities: Annotated[list[Category], Field(max_length=7)] = []
 
+class Rules(Model):
+    mode: Literal['quick', 'immediate'] = 'quick'
+    severity: Annotated[float, Field(ge=0, le=1)] = 0.5
+    drama: Annotated[float, Field(ge=0, le=1)] = 0.5
+
+class Relation(Model):
+    a: str
+    b: str
+    type: Literal['ally', 'rival', 'depends']
+    reason: Text
+
 class Case(Model):
     tasks: Annotated[list[Task], Field(min_length=1, max_length=6)]
     constitution: Constitution
+    rules: Rules | None = Field(default=None, exclude_if=lambda v: v is None)
+    relations: list[Relation] = Field(default_factory=list, max_length=15, exclude_if=lambda v: not v)
 
 class Envelope(Model):
     request_id: Annotated[str, Field(min_length=1, max_length=128)]
@@ -61,6 +75,7 @@ class RunRequest(Envelope):
 class Persona(Model):
     emoji: Annotated[str, Field(min_length=1, max_length=32)] = '⚖️'
     name: Annotated[str, Field(min_length=1, max_length=80)] = 'The Task Advocate'
+    archetype: Literal['dumbbell', 'envelope', 'book', 'slides', 'phone', 'broom', 'cart', 'briefcase', 'heart', 'note'] | None = Field(default=None, exclude_if=lambda v: v is None)
 
 class PlanStep(Model):
     step: Text
@@ -98,6 +113,7 @@ class ScheduleSlot(Model):
     task_id: str
     start: AwareDatetime
     end: AwareDatetime
+    buffer_min: Annotated[StrictInt, Field(ge=0, le=1440, exclude_if=lambda v: v == 0)] = 0
 
 class Metrics(Model):
     original_min: Annotated[StrictInt, Field(ge=0)]
@@ -180,6 +196,7 @@ class InterrogateResult(Envelope):
     proposal: Proposal | None = None
 
 class AppealRequest(PreviousRequest):
+    pardon: Annotated[bool, Field(strict=True)] = False
     new_fact: Text | None = None
     accepted_replacement: Replacement | None = None
 
@@ -209,6 +226,59 @@ class InterrogationProposal(Model):
     rating: Literal['supported', 'evasive', 'contradiction']
     credibility_delta: Annotated[float, Field(ge=-0.3, le=0.3)]
     proposal: Replacement | None = None
+
+class InitRequest(Envelope):
+    raw_text: Annotated[str, Field(min_length=1, max_length=4000)]
+    constitution: Constitution
+
+class TaskPatch(Model):
+    buffer_min: Annotated[StrictInt, Field(ge=0, le=1440)] | None = Field(default=None, exclude_if=lambda v: v is None)
+    duration_min: PositiveMinutes | None = Field(default=None, exclude_if=lambda v: v is None)
+    minimum_min: PositiveMinutes | None = Field(default=None, exclude_if=lambda v: v is None)
+
+class QuestionOption(Model):
+    label: Annotated[str, Field(min_length=1, max_length=100)]
+    fact: Text
+    patch: TaskPatch | None = None
+
+class InitQuestion(Model):
+    id: Annotated[str, Field(min_length=1, max_length=64)]
+    task_id: str
+    question: Text
+    options: Annotated[list[QuestionOption], Field(min_length=2, max_length=5)]
+
+class InitResult(Envelope):
+    source: Literal['live', 'fallback']
+    status: Literal['ok'] = 'ok'
+    case: Case
+    estimated: dict[str, list[str]]
+    questions: Annotated[list[InitQuestion], Field(max_length=3)] = []
+    relations: Annotated[list[Relation], Field(max_length=15)] = []
+
+class DraftTask(Task):
+    source_line: Text
+
+class InitDraft(Model):
+    tasks: Annotated[list[DraftTask], Field(min_length=1, max_length=6)]
+    questions: Annotated[list[InitQuestion], Field(max_length=3)] = []
+    relations: Annotated[list[Relation], Field(max_length=15)] = []
+
+class ReviseRequest(PreviousRequest):
+    instruction: Text
+
+class DetailedStep(PlanStep):
+    detail: Text
+    tip: Text | None = None
+
+class RevisedOrder(Model):
+    first_move: Text
+    done_when: Text
+    action_plan: Annotated[list[DetailedStep], Field(min_length=1, max_length=5)]
+
+class ReviseResult(Envelope, RevisedOrder):
+    source: Literal['live', 'fallback']
+    status: Literal['ok'] = 'ok'
+    task_id: str
 
 
 def validate_case(case: Case) -> None:
@@ -240,6 +310,11 @@ def validate_case(case: Case) -> None:
     if len(ids) != len(set(ids)):
         invalid('Task IDs must be unique.', 'tasks')
     graph = {t.id: t.depends_on for t in case.tasks}
+    for i, relation in enumerate(case.relations):
+        if relation.a not in graph or relation.b not in graph or relation.a == relation.b:
+            invalid('Relations must reference two existing distinct tasks.', f'relations[{i}]')
+        if relation.type == 'depends' and relation.b not in graph[relation.a]:
+            invalid('A depends relation must also be in depends_on.', f'relations[{i}]')
     for i, task in enumerate(case.tasks):
         if task.minimum_min > task.duration_min:
             invalid('Minimum cannot exceed confirmed duration.', f'tasks[{i}].minimum_min')
