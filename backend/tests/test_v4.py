@@ -170,7 +170,7 @@ def v4_result():
 
 def test_v4_demo_numbers_and_buffer_slot():
     request, result = v4_result()
-    assert result.metrics.model_dump() == dict(original_min=375, approved_min=285,
+    assert result.metrics.model_dump() == dict(original_min=395, approved_min=305,
         minutes_recovered=90, pending_min=0, free_capacity_min=175)
     clocks = [(s.task_id, s.start.strftime('%H:%M'), s.end.strftime('%H:%M'), s.buffer_min)
               for s in result.schedule]
@@ -189,7 +189,7 @@ def test_v4_appeal_numbers_keep_buffer_and_move_emails():
         Replacement.model_validate(fixture('interrogate.response.json')['proposal']))
     after = build_result(request.case, None, 'appeal-v4', 'fallback', Meta(),
         decisions=result.decisions, categories={'instagram':'health'}, revision=2, appeals_used=1)
-    assert after.metrics.model_dump() == dict(original_min=375, approved_min=300,
+    assert after.metrics.model_dump() == dict(original_min=395, approved_min=320,
         minutes_recovered=75, pending_min=0, free_capacity_min=160)
     slots = {s.task_id: s for s in after.schedule}
     assert slots['instagram'].start.strftime('%H:%M') == '12:20'
@@ -204,6 +204,22 @@ def test_buffer_cannot_cross_break_or_deadline():
     assert gym.schedule_status == 'PENDING' and gym.pending_reason == 'deadline'
     assert gym.approved_min == 60 and gym.saved_min == 0
     assert result.metrics.minutes_recovered == 0
+
+
+def test_api_accepts_budget_and_caps_fallback_placements(client, monkeypatch):
+    monkeypatch.setenv('TRIAL_MODE', 'live')
+    class Provider:
+        def __init__(self, settings): pass
+        async def run(self, case): raise ProviderFailure('local test')
+    app.state.service = TrialService(provider_factory=Provider)
+    body = fixture('run.request.json'); body['case']['budget_min'] = 240
+    response = client.post('/api/trial/run', json=body)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result['source'] == 'fallback'
+    assert result['metrics']['approved_min'] == 405 and result['metrics']['minutes_recovered'] == 0
+    assert result['metrics']['pending_min'] == 165
+    assert result['metrics']['free_capacity_min'] == 0
 
 
 def test_pardon_restores_scope_without_using_appeal_and_is_idempotent(client):

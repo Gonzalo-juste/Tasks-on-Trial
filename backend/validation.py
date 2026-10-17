@@ -1,6 +1,6 @@
 """Independent conservation checks on the final public result."""
 from .schemas import Case, TrialResult
-from .scheduler import free_intervals, verify_schedule
+from .scheduler import effective_budget, verify_schedule
 
 
 def verify_result(case: Case, result: TrialResult) -> None:
@@ -10,7 +10,8 @@ def verify_result(case: Case, result: TrialResult) -> None:
         raise ValueError('Result must contain each input task exactly once.')
     for d in result.decisions:
         task = tasks[d.task_id]
-        if d.original_min != task.duration_min or d.saved_min != d.original_min-d.approved_min:
+        saved = task.duration_min - d.approved_min + (task.buffer_min if d.verdict == 'DISMISSED' else 0)
+        if d.original_min != task.duration_min or d.saved_min != saved:
             raise ValueError('Per-task minutes are inconsistent.')
         if d.verdict == 'DISMISSED':
             if task.mandatory or d.approved_min != 0:
@@ -34,11 +35,11 @@ def verify_result(case: Case, result: TrialResult) -> None:
             raise ValueError('Pending reason does not match schedule status.')
     verify_schedule(case,result.decisions,result.schedule)
     m = result.metrics
-    original = sum(t.duration_min for t in case.tasks)
-    approved = sum(d.approved_min for d in result.decisions)
-    usable = sum(int((end-start).total_seconds()//60) for start,end in free_intervals(case))
+    original = sum(t.duration_min + t.buffer_min for t in case.tasks)
+    approved = sum(d.approved_min + (tasks[d.task_id].buffer_min if d.verdict != 'DISMISSED' else 0) for d in result.decisions)
+    usable = effective_budget(case)
     scheduled = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions if d.schedule_status == 'SCHEDULED')
-    pending = sum(d.approved_min for d in result.decisions if d.schedule_status == 'PENDING')
+    pending = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions if d.schedule_status == 'PENDING')
     expected = (original,approved,original-approved,pending,usable-scheduled)
     observed = (m.original_min,m.approved_min,m.minutes_recovered,m.pending_min,m.free_capacity_min)
     if observed != expected or sum(d.saved_min for d in result.decisions) != m.minutes_recovered:

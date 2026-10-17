@@ -1,6 +1,7 @@
 # Carlos round 2: v4 implementation and integration notes
 
-The pasted 11:40 update supplies the v4 additions. The published frontend fixtures
+The pasted 11:40 update supplies the v4 additions. Subsequent budget/accounting
+corrections below supersede its original work-only aggregate metrics. The published frontend fixtures
 remain v3, so they have not been overwritten. All existing routes and legacy replay
 responses remain compatible; v4 demo arithmetic is covered separately in test_v4.py.
 
@@ -48,15 +49,19 @@ missing archetypes and generic/duplicate names. Court speeches are prompted to
 use natural language, with common schema field leaks also replaced locally.
 
 Task.buffer_min defaults to zero. A scheduled slot begins with that task's buffer,
-then approved work, with no gap. Its end includes both. Neither saved_min nor
-approved_min contains buffer minutes. Free capacity subtracts scheduled buffers.
+then approved work, with no gap. Its end includes both. Per-decision original_min
+and approved_min describe work. Per-decision saved_min is original work minus
+approved work, plus the buffer when the task is DISMISSED. Retained buffers are
+not savings. Aggregate original_min, approved_min and pending_min include buffers;
+minutes_recovered equals the sum of per-decision saved_min.
 A buffer and its task must fit together, obey the deadline, avoid fixed blocks,
 and start after dependencies end. A pending or dismissed task reserves no buffer.
 For compatibility with the old fixtures, zero buffer fields may be omitted; treat
 missing buffer_min as zero. Nonzero schedule buffers are always returned.
 
-The v4 five-task check expects 375 requested, 285 approved, 90 recovered and
-175 free; after the accepted break, 300 approved, 75 recovered and 160 free.
+The older v4 five-task check now expects 395 requested including overhead, 305
+approved including overhead, 90 recovered and 175 free; after the accepted break,
+320 approved including overhead, 75 recovered and 160 free.
 Its precise slots match Carlos's pasted timetable. These are deterministic engine
 checks with prepared recommendations. Temperature zero is used for /run, but
 does not guarantee a live model will reproduce those verdicts. Exact pitch numbers

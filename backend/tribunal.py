@@ -98,7 +98,7 @@ def decide(task: Task, r: Recommendation) -> Decision:
         persona.archetype = default.archetype
     return Decision(task_id=task.id, persona=persona, defense=natural_language(r.defense), prosecution=natural_language(r.prosecution),
         verdict=verdict, original_min=task.duration_min, approved_min=minutes,
-        saved_min=task.duration_min-minutes, effective_title=title, reason=reason,
+        saved_min=task.duration_min-minutes+(task.buffer_min if dismissed else 0), effective_title=title, reason=reason,
         cut_scope=r.cut_scope if adjusted and verdict != 'APPROVED' else [],
         first_move=first_move, action_plan=action_plan, done_when=done_when,
         release=(r.release or Release(note='Not today. Revisit if your needs change.')) if dismissed else None,

@@ -24,6 +24,11 @@ def free_intervals(case: Case) -> list[tuple[datetime, datetime]]:
     return free
 
 
+def effective_budget(case: Case) -> int:
+    available = sum(int((end-start).total_seconds() // 60) for start, end in free_intervals(case))
+    return available if case.budget_min is None else min(case.budget_min, available)
+
+
 def plan(case: Case, decisions: list[Decision], categories=None):
     tasks = {t.id: t for t in case.tasks}
     by_id = {d.task_id: d for d in decisions}
@@ -31,7 +36,8 @@ def plan(case: Case, decisions: list[Decision], categories=None):
         raise ValueError('Decisions must cover the case exactly once.')
     categories = categories or {}
     free = free_intervals(case)
-    usable = sum(int((b-a).total_seconds() // 60) for a,b in free)
+    usable = effective_budget(case)
+    remaining_budget = usable
     priorities = {value:i for i,value in enumerate(case.constitution.priorities)}
     far_future = datetime.max.replace(tzinfo=timezone.utc)
     ranked = sorted(case.tasks, key=lambda t: (
@@ -58,6 +64,8 @@ def plan(case: Case, decisions: list[Decision], categories=None):
         d.schedule_status = 'PENDING'
         if any(dep not in scheduled for dep in task.depends_on):
             d.pending_reason = 'depends_unmet'
+        elif d.approved_min + task.buffer_min > remaining_budget:
+            d.pending_reason = 'no_fit'
         else:
             earliest = max([case.constitution.start.astimezone(timezone.utc)] +
                            [scheduled[dep].end.astimezone(timezone.utc) for dep in task.depends_on])
@@ -79,6 +87,7 @@ def plan(case: Case, decisions: list[Decision], categories=None):
                     replacement.append((finish, right))
                 free[i:i+1] = replacement
                 d.schedule_status = 'SCHEDULED'
+                remaining_budget -= d.approved_min + task.buffer_min
                 break
             if d.schedule_status == 'PENDING':
                 d.pending_reason = 'deadline' if task.deadline and fits_without_deadline else 'no_fit'
@@ -87,11 +96,11 @@ def plan(case: Case, decisions: list[Decision], categories=None):
                 message=f'No valid placement found for mandatory task {task.id}: {d.pending_reason}.'))
     schedule = sorted(scheduled.values(), key=lambda slot: (slot.start, slot.task_id))
     verify_schedule(case, decisions, schedule)
-    original = sum(t.duration_min for t in case.tasks)
-    approved = sum(d.approved_min for d in decisions)
+    original = sum(t.duration_min + t.buffer_min for t in case.tasks)
+    approved = sum(d.approved_min + (tasks[d.task_id].buffer_min if d.verdict != 'DISMISSED' else 0) for d in decisions)
     metrics = Metrics(original_min=original, approved_min=approved,
         minutes_recovered=original-approved,
-        pending_min=sum(d.approved_min for d in decisions if d.schedule_status == 'PENDING'),
+        pending_min=sum(d.approved_min + tasks[d.task_id].buffer_min for d in decisions if d.schedule_status == 'PENDING'),
         free_capacity_min=usable-sum(d.approved_min + tasks[d.task_id].buffer_min for d in decisions if d.schedule_status == 'SCHEDULED'))
     return schedule, metrics, conflicts
 
@@ -127,3 +136,5 @@ def verify_schedule(case: Case, decisions: list[Decision], schedule: list[Schedu
     for d in decisions:
         if (d.schedule_status == 'SCHEDULED') != (d.task_id in slots):
             raise ValueError('Schedule state inconsistent.')
+    if sum(int((s.end-s.start).total_seconds() // 60) for s in schedule) > effective_budget(case):
+        raise ValueError('Schedule exceeds the confirmed budget.')

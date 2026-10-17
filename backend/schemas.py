@@ -54,6 +54,7 @@ class Relation(Model):
 class Case(Model):
     tasks: Annotated[list[Task], Field(min_length=1, max_length=6)]
     constitution: Constitution
+    budget_min: Annotated[StrictInt, Field(ge=0, le=1440)] | None = Field(default=None, exclude_if=lambda v: v is None)
     rules: Rules | None = Field(default=None, exclude_if=lambda v: v is None)
     relations: list[Relation] = Field(default_factory=list, max_length=15, exclude_if=lambda v: not v)
 
@@ -97,7 +98,7 @@ class Decision(Model):
     verdict: Verdict
     original_min: PositiveMinutes
     approved_min: Annotated[StrictInt, Field(ge=0, le=1440)]
-    saved_min: Annotated[StrictInt, Field(ge=0, le=1440)]
+    saved_min: Annotated[StrictInt, Field(ge=0, le=2880)]
     effective_title: Text
     reason: Text
     cut_scope: Annotated[list[Text], Field(max_length=8)] = []
