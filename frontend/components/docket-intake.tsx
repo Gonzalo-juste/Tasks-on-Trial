@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { motion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 import { ArrowRight, Check, ChevronDown, Clock3, Gavel, Heart, Plus, Sparkles } from "lucide-react"
-import { TaskCharacter } from "@/components/task-character-art"
+import { JudgeCharacter, TaskCharacter } from "@/components/task-character-art"
 import { JusticeScale } from "@/components/justice-scale"
 import { budget, budgetHeadline } from "@/lib/budget"
 import { quickCapture } from "@/lib/estimates"
@@ -19,6 +19,10 @@ const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }
   { mode: "grand", label: "Grand trial", hint: "3 rounds · full drama" },
   { mode: "immediate", label: "Immediate sentence", hint: "Skip to the verdict" },
 ]
+const quickAddIcons: Record<string, string> = {
+  Study: "📚", Gym: "🏋️", Emails: "✉️", Slides: "📊", Meeting: "💼", Report: "📝", Groceries: "🛒",
+  Laundry: "🧺", Cook: "🍳", "Call family": "❤️", Run: "🏃", Read: "📖", Errands: "🧾", Social: "📱",
+}
 const quickAddItems: { label: string; line: string }[] = [
   { label: "Study", line: "Study" }, { label: "Gym", line: "Gym" }, { label: "Emails", line: "Reply to emails" },
   { label: "Slides", line: "Finish slides" }, { label: "Meeting", line: "Team meeting 30 min" }, { label: "Report", line: "Write report" },
@@ -76,6 +80,20 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
   const [skippedQuestion, setSkippedQuestion] = useState<string | null>(null)
   const [pulseTask, setPulseTask] = useState<string | null>(null)
   const parsed = useMemo(() => quickCapture(rawText), [rawText])
+  const reduceMotion = useReducedMotion()
+  const [slamming, setSlamming] = useState(false)
+  const [summoned, setSummoned] = useState<string | null>(null)
+  const convene = () => {
+    setError("")
+    if (reduceMotion) { onBegin(); return }
+    setSlamming(true)
+    window.setTimeout(() => { setSlamming(false); onBegin() }, 600)
+  }
+  const summon = (item: { label: string; line: string }) => {
+    appendQuickAdd(item.line)
+    setSummoned(item.label)
+    window.setTimeout(() => setSummoned((current) => current === item.label ? null : current), 700)
+  }
   const docket = caseData.tasks
   const summary = budget(docket, grantedMinutes)
   const headline = budgetHeadline(summary)
@@ -167,7 +185,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
   const overflowWidth = Math.max(0, Math.min(100 - grantedWidth, (summary.overBudgetMinutes / requestedScale) * 100))
   const answered = answeredQuestion === question?.id
 
-  return <section className="new-stage docket-new budget-docket">
+  return <section className={`new-stage docket-new budget-docket ${slamming ? "court-shake" : ""}`}>
     <header className="new-stage-heading budget-docket-heading"><div><span className="new-eyebrow">THE COURT OF A REASONABLE DAY · SESSION 01</span><h1>Your time.<br /><em>Their burden of proof.</em></h1><p>Add what wants your attention. The court decides what deserves it.</p></div><div className="docket-seal"><Gavel /><span>THE<br />DOCKET</span></div></header>
 
     <div className="docket-stage-grid"><div className="docket-stage-main"><section className="budget-first-panel docket-paper" aria-labelledby="available-time-title">
@@ -187,7 +205,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
 
     <section className="quick-capture docket-paper budget-capture"><div className="new-section-head"><span className="new-section-icon"><Sparkles /></span><div><span>THE DOCKET</span><h2>{docket.length ? headline.defendants : "File today’s defendants"}</h2></div><span className="capture-note">ONE TASK PER LINE · PASTE FRIENDLY</span></div>
       <label className="sr-only" htmlFor="task-capture">File your tasks</label><textarea id="task-capture" value={rawText} onChange={(event) => onTextChange(event.target.value)} placeholder="Finish pitch slides by 6pm / Gym 60 min / Reply to emails / Study for exam / Scroll TikTok 45 min" rows={5} aria-label="File your tasks, one task per line" />
-      <div className="quick-add-row"><span>QUICK-ADD</span>{quickAddItems.map((item) => <button key={item.label} onClick={() => appendQuickAdd(item.line)}>+ {item.label}</button>)}<button className="chaotic-day-button" onClick={loadDemo}>Try a chaotic day</button></div>
+      <div className="quick-add-row"><span>QUICK-ADD</span>{quickAddItems.map((item) => <button key={item.label} className={`summons-ticket ${summoned === item.label ? "is-stamped" : ""}`} onClick={() => summon(item)}><span className="ticket-icon" aria-hidden="true">{quickAddIcons[item.label] ?? "🗒️"}</span>{item.label}{summoned === item.label && <span className="ticket-stamp" aria-hidden="true">SUMMONED</span>}</button>)}<button className="chaotic-day-button" onClick={loadDemo}>Try a chaotic day</button></div>
       <div className="docket-task-list" aria-live="polite">{currentBatch.map((task, index) => {
         const estimated = parsed.estimated[task.id] ?? []
         const durationIsEstimated = estimated.includes("duration_min") && !manualDurations.includes(task.id)
@@ -218,11 +236,11 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     </section></div><aside className="docket-stage-scale"><JusticeScale grantedMinutes={summary.grantedMinutes} requestedMinutes={summary.requestedMinutes} impossible={summary.impossible} verdictLine={docket.length ? headline.line : "File your tasks and watch the scale."} defendants={docket.map((task) => ({ id: task.id, title: task.title, archetype: archetypeForTask(task), minutes: task.duration_min + (task.buffer_min ?? 0) }))} /></aside></div>
     <section className="priorities-block docket-paper budget-priorities"><div><Heart /><strong>What matters most</strong><small>Order the principles the judge should consider.</small></div><ol>{caseData.constitution.priorities.map((category, index) => <li key={category}><span className={`priority-gem ${category}`}>{priorityMarks[category]}</span><b>{category}</b><button aria-label={`Move ${category} up`} disabled={index === 0} onClick={() => movePriority(index, -1)}>↑</button><button aria-label={`Move ${category} down`} disabled={index === caseData.constitution.priorities.length - 1} onClick={() => movePriority(index, 1)}>↓</button></li>)}</ol></section>
 
-    {question && skippedQuestion !== question.id && <section className="single-witness-section"><div className="single-witness-icon" aria-hidden="true">⚖</div><div className="single-witness-content"><span className="new-eyebrow">ONE QUESTION FROM THE BENCH</span>{witnessTask && <div className="witness-about"><TaskCharacter archetype={archetypeForTask(witnessTask)} compact variant="defendant" prisonerNumber={docket.findIndex((task) => task.id === witnessTask.id) + 1} label={`Question about ${witnessTask.title}`} /><span>About defendant #{String(docket.findIndex((task) => task.id === witnessTask.id) + 1).padStart(2, "0")}<strong>{witnessTask.title}</strong></span></div>}<h2>{question.question}</h2><div className="single-witness-options">{question.options.map((option) => <button key={option.label} disabled={answered} onClick={() => applyAnswer(option)}>{option.label}<ArrowRight /></button>)}{!answered && <button className="skip-witness-button" onClick={() => setSkippedQuestion(question.id)}>Skip question <ArrowRight /></button>}</div>{answered && <span className="witness-answer-confirmation"><Check /> The fact is in the record.</span>}</div></section>}
+    {question && skippedQuestion !== question.id && <section className="single-witness-section"><div className="single-witness-icon judge-asks" aria-hidden="true"><JudgeCharacter /></div><div className="single-witness-content"><span className="new-eyebrow">ONE QUESTION FROM THE BENCH</span>{witnessTask && <div className="witness-about"><TaskCharacter archetype={archetypeForTask(witnessTask)} compact variant="defendant" prisonerNumber={docket.findIndex((task) => task.id === witnessTask.id) + 1} label={`Question about ${witnessTask.title}`} /><span>About defendant #{String(docket.findIndex((task) => task.id === witnessTask.id) + 1).padStart(2, "0")}<strong>{witnessTask.title}</strong></span></div>}<h2>{question.question}</h2><div className="single-witness-options">{question.options.map((option) => <button key={option.label} disabled={answered} onClick={() => applyAnswer(option)}>{option.label}<ArrowRight /></button>)}{!answered && <button className="skip-witness-button" onClick={() => setSkippedQuestion(question.id)}>Skip question <ArrowRight /></button>}</div>{answered && <span className="witness-answer-confirmation"><Check /> The fact is in the record.</span>}</div></section>}
 
     {error && <div className="court-error" role="alert"><span>{error}</span><button onClick={() => setError("")}>Dismiss</button></div>}
     <div className="trial-format" role="group" aria-label="Trial format"><span className="new-eyebrow">TRIAL FORMAT</span>{trialFormats.map((format) => <button key={format.mode} className={caseData.rules.mode === format.mode ? "active" : ""} aria-pressed={caseData.rules.mode === format.mode} onClick={() => onCase({ ...caseData, rules: { ...caseData.rules, mode: format.mode } })}><strong>{format.label}</strong><small>{format.hint}</small></button>)}</div>
-    <div className="convene-row"><span>{docket.length ? headline.defendants : "Add a task to open the docket."}</span><button className="begin-trial-button" disabled={busy || docket.length === 0} onClick={() => { setError(""); onBegin() }}><Gavel /> {busy ? "The court is convening…" : "Convene the court"}<ArrowRight /></button></div>
+    <div className="convene-row"><span>{docket.length ? headline.defendants : "Add a task to open the docket."}</span><button className={`begin-trial-button gavel-button ${slamming ? "is-slamming" : ""}`} disabled={busy || slamming || docket.length === 0} onClick={convene}><motion.span className="gavel-icon" animate={slamming ? { rotate: [0, -55, 20, 0] } : { rotate: 0 }} transition={{ duration: 0.55 }}><Gavel /></motion.span> {busy ? "The court is convening…" : slamming ? "Order! Order!" : "Convene the court"}<ArrowRight /></button></div>
     <span className="sr-only">The available scheduling window is {scheduleMinutes} minutes including commitments.</span>
   </section>
 }

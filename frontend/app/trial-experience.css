@@ -95,3 +95,31 @@
 .justice-scale.is-over .scale-verdict{color:#ffb4a6}
 .justice-scale.is-impossible .scale-verdict{color:#ff8f7d}
 @media(max-width:980px){.docket-stage-grid{grid-template-columns:1fr}.docket-stage-scale{position:static;order:-1}}
+
+/* ---- Docket tier B: brass gavel, summons tickets, the judge asks ---- */
+.gavel-button{position:relative;overflow:hidden;color:#2a1d0f!important;border:2px solid #8a6a3e!important;background:linear-gradient(180deg,#f4d996 0%,#d8ae5c 45%,#a9783a 100%)!important;box-shadow:0 4px 0 #6d4f2a,0 10px 24px #6d4f2a55!important;font-weight:900!important;letter-spacing:.04em;transition:transform .12s,box-shadow .12s}
+.gavel-button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 5px 0 #6d4f2a,0 14px 28px #6d4f2a66!important}
+.gavel-button:active:not(:disabled),.gavel-button.is-slamming{transform:translateY(3px);box-shadow:0 1px 0 #6d4f2a,0 6px 14px #6d4f2a55!important}
+.gavel-button:disabled{filter:grayscale(.5) brightness(.95);cursor:not-allowed}
+.gavel-button .gavel-icon{display:inline-flex;transform-origin:80% 80%}
+.gavel-button.is-slamming:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 20% 50%,#fff8,transparent 60%);animation:gavel-flash .5s ease-out}
+@keyframes gavel-flash{from{opacity:1}to{opacity:0}}
+.summons-ticket{position:relative;display:inline-flex;align-items:center;gap:6px;padding:7px 12px 7px 10px!important;color:#3a2f22!important;border:1px dashed #b89a62!important;border-radius:3px!important;background:linear-gradient(90deg,#fffaf0 0 calc(100% - 10px),#f3e6c8 calc(100% - 10px))!important;box-shadow:0 2px 0 #e2d2ad;font-weight:700;transition:transform .15s}
+.summons-ticket:nth-child(odd){transform:rotate(-1.2deg)}.summons-ticket:nth-child(even){transform:rotate(1deg)}
+.summons-ticket:hover{transform:rotate(0) translateY(-2px)}
+.ticket-icon{font-size:15px;line-height:1}
+.summons-ticket.is-stamped{border-color:#b23b31!important}
+.ticket-stamp{position:absolute;top:50%;left:50%;padding:1px 5px;color:#b23b31;border:2px solid #b23b31;border-radius:3px;background:#fff8f2e6;font-size:9px;font-weight:900;letter-spacing:.12em;transform:translate(-50%,-50%) rotate(-12deg);animation:stamp-in .35s cubic-bezier(.2,1.6,.4,1)}
+@keyframes stamp-in{from{opacity:0;transform:translate(-50%,-50%) rotate(-12deg) scale(2.2)}to{opacity:1;transform:translate(-50%,-50%) rotate(-12deg) scale(1)}}
+.single-witness-section{align-items:flex-start;color:#fbf3df;border:1px solid #6c563e!important;background:radial-gradient(ellipse at 10% 0%,#f1d08e33,transparent 55%),linear-gradient(180deg,#243b48,#172d39)!important}
+.single-witness-section .new-eyebrow{color:#d9c698}
+.single-witness-icon.judge-asks{width:110px;min-width:110px;height:auto;border:0!important;background:none!important;font-size:0}
+.single-witness-icon.judge-asks .court-judge{width:110px}
+.single-witness-section h2{position:relative;margin:8px 0 10px;padding:12px 16px;color:#1f2f38;border:2px solid #e2c27a;border-radius:14px;background:#fffaf0;box-shadow:0 8px 20px #0005}
+.single-witness-section h2:before{content:"";position:absolute;top:18px;left:-11px;width:18px;height:18px;border-bottom:2px solid #e2c27a;border-left:2px solid #e2c27a;background:#fffaf0;transform:rotate(45deg)}
+.single-witness-section .witness-about{color:#1f3442}
+.single-witness-section .single-witness-options button{color:#1f2f38;background:#fffaf0;border-color:#e2c27a}
+.single-witness-section .skip-witness-button{color:#e8dcc0!important;background:transparent!important}
+.single-witness-section .witness-answer-confirmation{color:#a9d5b1}
+.justice-scale .is-defendant .character-illustration{filter:saturate(1.4) brightness(1.15) drop-shadow(0 0 6px #f6d48a66)!important}
+.justice-scale .pan-defendant .docket-character{width:46px;min-width:46px;height:50px}
