@@ -1,4 +1,5 @@
 # Tasks on Trial — Edinburgh AI Hackathon
+(Collaboration with Carlos de la Fuente)
 
 Every planner assumes your tasks deserve your time. We make them prove it.
 
