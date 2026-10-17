@@ -19,7 +19,7 @@ def from_demo(trial_request):
     for row, task in zip(rows, trial_request.case.tasks):
         data = {k:row[k] for k in ['task_id','persona','defense','prosecution','approved_min','effective_title','cut_scope','first_move','action_plan','done_when','release','suggested_need']}
         data['recommendation'] = row['verdict']
-        data['fact_cited'] = task.facts[-1] if row['verdict'] == 'REDUCED' else None
+        data['fact_cited'] = task.facts[-1] if row['verdict'] in {'REDUCED', 'DISMISSED'} else None
         proposals.append(data)
     return RunProposal.model_validate({'decisions':proposals,'judge_summary':'Ignored contradictory summary: 999 minutes'})
 

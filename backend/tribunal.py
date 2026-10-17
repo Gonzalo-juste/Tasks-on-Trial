@@ -54,6 +54,9 @@ def decide(task: Task, r: Recommendation) -> Decision:
         if task.mandatory:
             verdict, adjusted = 'APPROVED', False
             reason = 'Mandatory task protected; confirmed scope retained.'
+        elif r.fact_cited not in task.facts:
+            verdict, adjusted = 'APPROVED', False
+            reason = 'No exact confirmed fact cited for the dismissal; confirmed scope retained.'
         else:
             minutes = 0
             reason = 'Not justified for today; no time allocated. You can question this decision.'

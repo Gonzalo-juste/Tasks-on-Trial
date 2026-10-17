@@ -192,3 +192,15 @@ Balanced plans retain their specific text. The same rule applies to interrogatio
 proposals and accepted replacements, so a repaired proposal and its accepted
 order remain consistent. Response fields, verdict rules and metrics are unchanged.
 This is a local deterministic repair; it makes no additional provider calls.
+
+## Evidence required for dismissals
+
+Generated dismissals, like reductions, require `fact_cited` to exactly match a
+confirmed fact belonging to that task. Missing, invented, paraphrased or other-task
+citations cause Python to retain the original title, scope and duration, remove the
+release order, and explain the rejected dismissal. Mandatory tasks remain protected
+even with a matching citation. Retained minutes are never counted as recovered.
+
+This verifies citation provenance, not whether the fact logically justifies the
+verdict. The model still has to assess relevance and fairness. The private citation
+field does not change the public API; recorded replay fixtures stay unchanged.

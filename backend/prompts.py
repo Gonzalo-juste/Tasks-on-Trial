@@ -8,8 +8,11 @@ Each decision contains task_id, persona {emoji,name}, defense (first person, <=2
 prosecution (fair, <=240 chars), recommendation APPROVED/REDUCED/DISMISSED, approved_min,
 effective_title, fact_cited (exact text from that task's facts, or null), cut_scope,
 first_move, action_plan [{step,minutes}], done_when, release, suggested_need.
-Mandatory tasks cannot be dismissed. A reduction requires allow_reduction and an EXACT
-fact_cited from facts, and must stay between minimum_min and duration_min. Never increase.
+Mandatory tasks cannot be dismissed. Both REDUCED and DISMISSED require fact_cited to
+EXACTLY match an entry in that same task's facts. Never paraphrase, invent a citation,
+or borrow another task's fact. Without such a fact, keep APPROVED and the original scope.
+A reduction also requires allow_reduction and must stay between minimum_min and duration_min.
+Never increase. A matching citation establishes provenance; choose a fair verdict that the fact supports.
 duration_min is the user's REQUEST, not proof that all that time is necessary.
 When a confirmed fact identifies optional scope, propose a concrete smaller deliverable,
 with fewer minutes (at least minimum_min) and cite that exact fact. Do not approve the
