@@ -59,12 +59,15 @@ into chat, screenshots, fixtures, logs or frontend environment variables.
 The application reads `backend/.env` on each request; exported environment variables
 override that file. Set `NEBIUS_MODEL` to an ID available in your Nebius account before
 using `TRIAL_MODE=live`. Start without the `TRIAL_MODE=replay` override to enable it.
-**Live inference benchmarking has not been run: the user requested local tests only.**
-No particular model is claimed to meet the latency target until it is measured.
+Live inference was subsequently authorised and tested with Carlos's five-task demo.
+The selected local configuration is `nvidia/Nemotron-3_5-Lightning` with `json_schema`.
+Three consecutive model checks completed in 5.336, 3.969 and 3.864 seconds, one call
+apiece, with valid final results. This is five-task evidence, not a six-task benchmark
+or a latency guarantee. See `LIVE_VALIDATION.md`.
 
 - Provider: Nebius OpenAI-compatible `/chat/completions` API.
-- `NEBIUS_RESPONSE_FORMAT=json_object` by default. If a chosen model supports strict
-  schemas, use `json_schema`; one unsupported-schema retry may switch to JSON mode.
+- `NEBIUS_RESPONSE_FORMAT=json_schema` in the example configuration. The client also
+  supports `json_object`; one unsupported-schema retry may switch to JSON mode.
 - Maximum two provider attempts, both within one 25-second total budget. Requests
   and responses are validated, including exact target IDs, before a result is used.
 - Missing credentials/model, timeout, malformed JSON or provider errors give a
@@ -156,3 +159,23 @@ an appealed trial or overwrite another trial's identity.
 The local suite also exercises 120 seeded scheduling cases with dependency graphs,
 short windows and deadlines. No external inference is used. Public fixture shapes
 and endpoint paths are unchanged.
+
+## Connect from Carlos's laptop
+
+When both laptops can reach each other over the local network, start the backend
+with `--host 0.0.0.0 --port 8000` and give Carlos the host laptop's Wi-Fi IP, not
+127.0.0.1 or 0.0.0.0. The current address is dynamic and may change with the network.
+Carlos's frontend opened at localhost:3000 is already allowed by CORS. If he uses
+a different frontend origin, add that exact origin to CORS_ORIGINS and restart.
+Do not use a wildcard origin as a substitute.
+
+For an explicit opt-in live check of the prepared example:
+
+```sh
+backend/.venv/bin/python -m backend.live_check \
+  --model nvidia/Nemotron-3_5-Lightning --format json_schema --allow-live
+```
+
+This sends the five prepared tasks to Nebius and may consume inference credit.
+Live results can differ from the deterministic fixture; never label generated output
+as replay or require it to reproduce the fixture's exact verdicts.

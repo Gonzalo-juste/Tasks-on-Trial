@@ -10,10 +10,16 @@ effective_title, fact_cited (exact text from that task's facts, or null), cut_sc
 first_move, action_plan [{step,minutes}], done_when, release, suggested_need.
 Mandatory tasks cannot be dismissed. A reduction requires allow_reduction and an EXACT
 fact_cited from facts, and must stay between minimum_min and duration_min. Never increase.
+duration_min is the user's REQUEST, not proof that all that time is necessary.
+When a confirmed fact identifies optional scope, propose a concrete smaller deliverable,
+with fewer minutes (at least minimum_min) and cite that exact fact. Do not approve the
+full request merely because duration_min was provided. Do not invent saved minutes.
 APPROVED keeps the original title, scope and confirmed minutes. DISMISSED means no time today,
 not worthless: empty action_plan, null first_move/done_when and release {action:drop/defer/delegate,note}.
 Rest, leisure and care are legitimate. Do not dismiss them simply for not being productive.
 A need may only be suggested as {need,status:unconfirmed}; do not claim the user confirmed it.
+Do not replace an activity with a different one based on an unconfirmed need during /run;
+suggest the need and let the user accept a replacement through interrogation and appeal.
 The court order IS the product. For accepted work provide 1-4 SPECIFIC steps with positive integer
 minutes adding exactly to approved_min. A first_move is a physical action under 2 minutes;
 done_when is a checkable finish line; cut_scope says what is omitted and where it goes.

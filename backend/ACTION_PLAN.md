@@ -14,7 +14,8 @@ The partner's final feature freeze remains 15:30, with product and pitch due at 
 
 ## Current delivery constraints
 
-- The user requested local tests only. Live inference/model benchmarking is deferred.
+- The user subsequently authorised live tests using Carlos's five-task example.
+  Three strict-schema generations passed; six-task timing and frontend integration remain to verify.
 - `/init`, separate-agent rounds, drag-and-drop, precedents, login, database and
   calendar sync stay out of scope.
 - All edits stay in `backend/`. Merge to `main` is agreed by Carlos and Gonzalo.
@@ -42,8 +43,8 @@ objects are already implemented. Backend edits remain confined to backend/.
   Carlos must run the backend locally or use an explicitly shared backend address;
   localhost on Carlos's computer does not point to Gonzalo's computer.
 - 11:45 target: live /run implementation is present, but real inference validation
-  remains deferred because Gonzalo requested local-only tests. Do not report it as
-  an end-to-end live success.
+  was initially deferred for local-only testing. Gonzalo subsequently authorised
+  live generation; see LIVE_VALIDATION.md for measured results.
 - 12:30: assess the real UI/backend circuit. If unavailable, retain the labelled
   replay/conservative fallback and prioritise integration over extras.
 - /interrogate and /appeal: implemented and locally tested; confirm the frontend

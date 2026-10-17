@@ -90,3 +90,30 @@ def test_timeout_cancels_slow_provider():
         assert monotonic()-started < 0.5
         assert caught.value.reason=='timeout'
     asyncio.run(check())
+
+
+def test_validation_retry_logs_do_not_echo_provider_content(caplog):
+    secret='PRIVATE_PROVIDER_VALUE_DO_NOT_LOG'
+    async def handler(request):
+        return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps({'decisions':secret})}}]})
+    async def check():
+        case=RunRequest.model_validate(fixture('run.request.json')).case
+        with pytest.raises(ProviderFailure):
+            await NebiusClient(settings(),httpx.MockTransport(handler)).run(case)
+    asyncio.run(check())
+    assert secret not in caplog.text
+    assert 'test-not-a-real-key' not in caplog.text
+    assert 'provider_retry' in caplog.text
+
+
+def test_lightning_requests_direct_structured_output():
+    bodies=[]
+    async def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200,json=success_payload())
+    async def check():
+        case=RunRequest.model_validate(fixture('run.request.json')).case
+        s=replace(settings(),model='nvidia/Nemotron-3_5-Lightning')
+        await NebiusClient(s,httpx.MockTransport(handler)).run(case)
+    asyncio.run(check())
+    assert bodies[0]['chat_template_kwargs']=={'enable_thinking':False}

@@ -46,11 +46,16 @@ class NebiusClient:
                             {'role':'system', 'content':system+'\nJSON schema:\n'+json.dumps(schema.model_json_schema())},
                             {'role':'user', 'content':json.dumps(payload, ensure_ascii=False)}],
                             'response_format':response_spec, 'temperature':0.2, 'max_tokens':6000}
+                        # Verified provider-specific control for direct structured output:
+                        # https://github.com/nebius/nebius-physical-ai/blob/main/docs/workbench/token-factory-deprecation-verification.md
+                        if s.model == 'nvidia/Nemotron-3_5-Lightning':
+                            body['chat_template_kwargs'] = {'enable_thinking':False}
                         try:
                             calls += 1
+                            attempt_started = monotonic()
                             response = await client.post(s.base_url+'/chat/completions',
                                 headers={'Authorization':'Bearer '+s.api_key}, json=body,
-                                timeout=min(19.0 if attempt == 0 else remaining, remaining))
+                                timeout=remaining)
                             if response.status_code in (401,403,404):
                                 reason = f'provider_status_{response.status_code}'
                                 break
@@ -59,6 +64,7 @@ class NebiusClient:
                                 reason = 'unsupported_schema'
                                 continue
                             response.raise_for_status()
+                            logger.info('provider_response model=%s attempt=%s latency_ms=%s', s.model, calls, int((monotonic()-attempt_started)*1000))
                             message = response.json()['choices'][0]['message']['content']
                             parsed = schema.model_validate_json(message)
                             if validate:
@@ -68,6 +74,8 @@ class NebiusClient:
                             return parsed, meta
                         except (httpx.HTTPError, ValidationError, ValueError, KeyError, IndexError, TypeError) as exc:
                             reason = type(exc).__name__  # never include response body or task contents
+                            fields = [('.'.join(map(str,e['loc'])), e['type']) for e in exc.errors(include_input=False)] if isinstance(exc,ValidationError) else []
+                            logger.warning('provider_retry model=%s attempt=%s reason=%s fields=%s',s.model,calls,reason,fields)
         except TimeoutError:
             reason = 'timeout'
         elapsed = int((monotonic()-started)*1000)
