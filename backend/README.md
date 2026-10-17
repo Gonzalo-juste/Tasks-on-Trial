@@ -179,3 +179,16 @@ backend/.venv/bin/python -m backend.live_check \
 This sends the five prepared tasks to Nebius and may consume inference credit.
 Live results can differ from the deterministic fixture; never label generated output
 as replay or require it to reproduce the fixture's exact verdicts.
+
+## Court-order wording when time changes
+
+When a proposed duration is clamped, or the step total would require rescaling,
+the backend replaces the plan, first move and finish condition together with a
+neutral one-step order using the final approved minutes. It does not preserve
+old time-dependent prose while changing only numeric fields. A missing plan
+also receives consistent starter and finish wording.
+
+Balanced plans retain their specific text. The same rule applies to interrogation
+proposals and accepted replacements, so a repaired proposal and its accepted
+order remain consistent. Response fields, verdict rules and metrics are unchanged.
+This is a local deterministic repair; it makes no additional provider calls.

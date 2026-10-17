@@ -6,22 +6,30 @@ from .validation import verify_result
 
 
 def normalize_plan(steps: list[PlanStep], minutes: int, title: str) -> list[PlanStep]:
-    """Preserve positive whole-minute steps and exactly conserve the time budget."""
-    if not steps:
-        return [PlanStep(step=f'Work on {title}'[:500], minutes=minutes)]
-    steps = steps[:min(4, minutes)]
-    total = sum(s.minutes for s in steps)
-    # Reserve a minute per step, distribute the rest by largest remainder.
-    budget = minutes - len(steps)
-    shares = [budget*s.minutes/total for s in steps]
-    allocated = [1+int(v) for v in shares]
-    remaining = minutes-sum(allocated)
-    order = sorted(range(len(steps)), key=lambda i: (-(shares[i]-int(shares[i])), i))
-    for i in order[:remaining]:
-        allocated[i] += 1
-    if total == minutes:
-        allocated = [s.minutes for s in steps]
-    return [PlanStep(step=s.step, minutes=n) for s,n in zip(steps, allocated)]
+    """Keep balanced plans; replace incompatible wording instead of rescaling it."""
+    if not 1 <= len(steps) <= 4 or sum(s.minutes for s in steps) != minutes:
+        # A title can itself mention an obsolete duration, so do not repeat it.
+        return [PlanStep(step='Work on the approved task scope', minutes=minutes)]
+    return [step.model_copy(deep=True) for step in steps]
+
+
+def consistent_order(steps: list[PlanStep], minutes: int, title: str,
+                     first_move: str | None, done_when: str | None,
+                     proposed_min: int | None = None):
+    """Treat the plan and its surrounding instructions as one time-dependent unit."""
+    changed = proposed_min is not None and proposed_min != minutes
+    incompatible = not 1 <= len(steps) <= 4 or sum(s.minutes for s in steps) != minutes
+    if changed or incompatible:
+        return (
+            'Prepare the materials needed for the approved task scope.',
+            normalize_plan([], minutes, title),
+            'The approved task scope is completed.',
+        )
+    return (
+        first_move or f'Prepare to start {title}'[:500],
+        normalize_plan(steps, minutes, title),
+        done_when or f'{title} done'[:500],
+    )
 
 
 def fallback_recommendation(task: Task) -> Recommendation:
@@ -75,13 +83,14 @@ def decide(task: Task, r: Recommendation) -> Decision:
     useful = r if adjusted else fallback_recommendation(task)
     need = r.suggested_need.model_copy(update={'status':'unconfirmed'}) if r.suggested_need else None
     dismissed = verdict == 'DISMISSED'
+    first_move, action_plan, done_when = (None, [], None) if dismissed else consistent_order(
+        useful.action_plan, minutes, title, useful.first_move, useful.done_when,
+        proposed_min=useful.approved_min)
     return Decision(task_id=task.id, persona=r.persona, defense=r.defense, prosecution=r.prosecution,
         verdict=verdict, original_min=task.duration_min, approved_min=minutes,
         saved_min=task.duration_min-minutes, effective_title=title, reason=reason,
         cut_scope=r.cut_scope if adjusted and verdict != 'APPROVED' else [],
-        first_move=None if dismissed else (useful.first_move or f'Prepare to start {title}'[:500]),
-        action_plan=[] if dismissed else normalize_plan(useful.action_plan, minutes, title),
-        done_when=None if dismissed else (useful.done_when or f'{title} done'[:500]),
+        first_move=first_move, action_plan=action_plan, done_when=done_when,
         release=(r.release or Release(note='Not today. Revisit if your needs change.')) if dismissed else None,
         schedule_status='NOT_APPLICABLE' if dismissed else 'PENDING',
         suggested_need=need)
@@ -121,15 +130,15 @@ def accepted_decision(task: Task, old: Decision, replacement: Replacement) -> De
     if minutes == task.duration_min and replacement.title != task.title:
         raise ValueError('This MVP requires replacements to reduce duration.')
     steps = replacement.action_plan or [PlanStep(step=s, minutes=1) for s in (replacement.steps or [])]
+    first_move, action_plan, done_when = consistent_order(
+        steps, minutes, replacement.title, replacement.first_move, replacement.done_when)
     return old.model_copy(update={
         'verdict':'REDUCED' if minutes < task.duration_min else 'APPROVED',
         'approved_min':minutes, 'saved_min':task.duration_min-minutes,
         'effective_title':replacement.title,
         'reason':'Replacement explicitly accepted by the user; confirmed minimum preserved.',
         'cut_scope':replacement.cut_scope,
-        'first_move':replacement.first_move or f'Prepare to start {replacement.title}'[:500],
-        'action_plan':normalize_plan(steps, minutes, replacement.title),
-        'done_when':replacement.done_when or f'{replacement.title} done'[:500],
+        'first_move':first_move, 'action_plan':action_plan, 'done_when':done_when,
         'release':None, 'schedule_status':'PENDING', 'pending_reason':None,
         'suggested_need':Need(need=replacement.need, status='confirmed') if replacement.need else None,
     }, deep=True)
@@ -139,9 +148,10 @@ def make_proposal(task: Task, replacement: Replacement | None) -> Proposal | Non
     if replacement is None or not task.minimum_min <= replacement.duration_min < task.duration_min:
         return None
     steps = replacement.action_plan or [PlanStep(step=s, minutes=1) for s in (replacement.steps or [])]
+    first_move, action_plan, done_when = consistent_order(
+        steps, replacement.duration_min, replacement.title,
+        replacement.first_move, replacement.done_when)
     return Proposal(title=replacement.title, duration_min=replacement.duration_min,
         need=replacement.need, saved_min=task.duration_min-replacement.duration_min,
         cut_scope=replacement.cut_scope,
-        first_move=replacement.first_move or f'Prepare to start {replacement.title}'[:500],
-        action_plan=normalize_plan(steps, replacement.duration_min, replacement.title),
-        done_when=replacement.done_when or f'{replacement.title} done'[:500])
+        first_move=first_move, action_plan=action_plan, done_when=done_when)
