@@ -82,7 +82,8 @@ export interface TrialResult {
   status: "ok" | "conflict"
   judge_summary: string
   decisions: Decision[]
-  schedule: { task_id: string; start: string; end: string; buffer_min: number }[]
+  /** rest_after_min: a pre-assigned break after the task, part of the slot (sent by the backend when supported). */
+  schedule: { task_id: string; start: string; end: string; buffer_min: number; rest_after_min?: number }[]
   metrics: {
     original_min: number
     approved_min: number

@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronDown, Clock3, Gavel, Send, ShieldCheck, Sparkles, X } from "lucide-react"
 import { JudgeCharacter, ProsecutorCharacter, TaskCharacter } from "@/components/task-character-art"
 import DocketIntake from "@/components/docket-intake"
+import { FocusRoom } from "@/components/focus-room"
 import { appeal, interrogate, run, runReplay } from "@/lib/api"
 import { pardon, revise, type PardonInput } from "@/lib/api-extra"
 import { demoCase } from "@/lib/mocks"
@@ -286,8 +287,8 @@ function Courtroom({ result, caseData, relations, onSeeDay, onCrossExamine, onPa
   </section>
 }
 
-function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrder, pardonIds }: {
-  result: TrialResult; caseData: Case; relations: InitResult["relations"]; onBack: () => void; onCrossExamine: (id: string) => void; openOrder: (id: string) => void; pardonIds: string[]
+function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrder, onStart, pardonIds, activeTaskId }: {
+  result: TrialResult; caseData: Case; relations: InitResult["relations"]; onBack: () => void; onCrossExamine: (id: string) => void; openOrder: (id: string) => void; onStart: (id: string) => void; pardonIds: string[]; activeTaskId: string | null
 }) {
   const scheduled = result.schedule.map((slot) => ({ slot, task: caseData.tasks.find((task) => task.id === slot.task_id), decision: result.decisions.find((decision) => decision.task_id === slot.task_id) })).filter((item) => item.task && item.decision)
   const allocatedMinutes = scheduled.reduce((total, item) => total + minutes(item.slot.end) - minutes(item.slot.start), 0)
@@ -297,9 +298,14 @@ function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrd
   const span = Math.max(1, dayEnd - dayStart)
   const fixed = caseData.constitution.fixed_blocks
   const timelineEntries = [
-    ...scheduled.map(({ slot, task, decision }) => ({ start: slot.start, end: slot.end, title: decision?.effective_title ?? task?.title ?? "Task", type: "task", task, decision, buffer: slot.buffer_min })),
-    ...fixed.map((block) => ({ start: block.start, end: block.end, title: block.label, type: "fixed", buffer: 0, task: undefined, decision: undefined })),
+    ...scheduled.map(({ slot, task, decision }) => ({ start: slot.start, end: slot.end, title: decision?.effective_title ?? task?.title ?? "Task", type: "task", task, decision, buffer: slot.buffer_min, rest: slot.rest_after_min ?? 0 })),
+    ...fixed.map((block) => ({ start: block.start, end: block.end, title: block.label, type: "fixed", buffer: 0, rest: 0, task: undefined, decision: undefined })),
   ].sort((a, b) => a.start.localeCompare(b.start))
+  // The phase the user is in: the task they started, or else whatever the clock says is happening now.
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes()
+  const isCurrent = (entry: { type: string; start: string; end: string; task?: Task }) => activeTaskId
+    ? entry.type === "task" && entry.task?.id === activeTaskId
+    : minutes(entry.start) <= nowMinutes && nowMinutes < minutes(entry.end)
   const freeGaps: { start: number; end: number }[] = []
   let cursor = dayStart
   timelineEntries.forEach((entry) => {
@@ -313,12 +319,12 @@ function Sentence({ result, caseData, relations, onBack, onCrossExamine, openOrd
     <div className="courtroom-topline sentence-topline"><div><span className="new-eyebrow">THE SENTENCE · YOUR DAY, RETURNED</span><h1>{demoSentence ? "Five tasks entered. Four survived. The day belongs to you again." : "Here's your day."}</h1><p>{demoSentence ? "A considered plan, with room left to breathe." : "A considered plan, with room left to breathe."}</p></div><button className="back-to-court" onClick={onBack}><ArrowLeft /> Back to the courtroom</button></div>
     <div className="sentence-summary-new"><div><small>TIME RECOVERED</small><strong>{result.metrics.minutes_recovered}<em> min</em></strong></div><p>{demoSentence ? `Allocated ${allocatedMinutes} · ${result.metrics.minutes_recovered} MINUTES RECOVERED · ${result.metrics.free_capacity_min} unallocated.` : result.judge_summary}</p><span>FREE CAPACITY <b>{result.metrics.free_capacity_min} MIN</b></span></div>
     {pardonIds.length > 0 && <div className="pardon-banner"><ShieldCheck /> Pardoned and returned to the day: {pardonIds.map((id) => caseData.tasks.find((task) => task.id === id)?.title).filter(Boolean).join(", ")}</div>}
-    <div className="day-overview"><section className="timeline-new"><div className="overview-head"><div><span className="new-eyebrow">A CLEARER DAY</span><h2>The timeline</h2></div><span>{caseData.constitution.start} — {caseData.constitution.end}</span></div><div className="timeline-axis"><div className="hour-labels">{Array.from({ length: Math.floor(span / 60) + 1 }, (_, index) => dayStart + index * 60).filter((time) => time <= dayEnd).map((time) => <span key={time} style={{ top: `${((time - dayStart) / span) * 100}%` }}>{clock(time)}</span>)}</div><div className="timeline-track-new">{freeGaps.map((gap) => <div key={`free-${gap.start}`} className="free-gap-new" style={{ top: `${((gap.start - dayStart) / span) * 100}%`, height: `${((gap.end - gap.start) / span) * 100}%` }}><span>Free</span></div>)}{timelineEntries.map((entry, index) => <div key={`${entry.type}-${index}`} className={`time-block-new ${entry.type === "fixed" ? "fixed-block-new" : ""}`} style={{ top: `${((minutes(entry.start) - dayStart) / span) * 100}%`, height: `${Math.max(3, ((minutes(entry.end) - minutes(entry.start)) / span) * 100)}%` }}><strong>{entry.title}</strong><small>{entry.start}–{entry.end}</small>{entry.type === "task" && entry.buffer > 0 && <span className="buffer-hatch" style={{ width: `${Math.min(55, (entry.buffer / Math.max(minutes(entry.end) - minutes(entry.start), 1)) * 100)}%` }} title={`${entry.buffer} min travel/setup`} />}</div>)}</div></div><div className="timeline-legend-new"><span><i className="legend-scheduled" />Scheduled</span><span><i className="legend-hatched" />Travel/setup</span><span><i className="legend-free-dashed" />Free</span></div></section>
+    <div className="day-overview"><section className="timeline-new"><div className="overview-head"><div><span className="new-eyebrow">A CLEARER DAY</span><h2>The timeline</h2></div><span>{caseData.constitution.start} — {caseData.constitution.end}</span></div><div className="timeline-axis"><div className="hour-labels">{Array.from({ length: Math.floor(span / 60) + 1 }, (_, index) => dayStart + index * 60).filter((time) => time <= dayEnd).map((time) => <span key={time} style={{ top: `${((time - dayStart) / span) * 100}%` }}>{clock(time)}</span>)}</div><div className="timeline-track-new">{freeGaps.map((gap) => <div key={`free-${gap.start}`} className="free-gap-new" style={{ top: `${((gap.start - dayStart) / span) * 100}%`, height: `${((gap.end - gap.start) / span) * 100}%` }}><span>Free</span></div>)}{timelineEntries.map((entry, index) => <div key={`${entry.type}-${index}`} className={`time-block-new ${entry.type === "fixed" ? "fixed-block-new" : ""} ${isCurrent(entry) ? "is-current" : ""}`} style={{ top: `${((minutes(entry.start) - dayStart) / span) * 100}%`, height: `${Math.max(3, ((minutes(entry.end) - minutes(entry.start)) / span) * 100)}%` }}><strong>{entry.title}</strong><small>{entry.start}–{entry.end}</small>{entry.type === "task" && entry.buffer > 0 && <span className="buffer-hatch" style={{ width: `${Math.min(55, (entry.buffer / Math.max(minutes(entry.end) - minutes(entry.start), 1)) * 100)}%` }} title={`${entry.buffer} min travel/setup`} />}{entry.type === "task" && (entry.rest ?? 0) > 0 && <span className="rest-band" style={{ height: `${Math.min(40, ((entry.rest ?? 0) / Math.max(minutes(entry.end) - minutes(entry.start), 1)) * 100)}%` }} title={`${entry.rest} min break`}>break</span>}{isCurrent(entry) && <span className="now-chip">NOW</span>}</div>)}</div></div><div className="timeline-legend-new"><span><i className="legend-scheduled" />Scheduled</span><span><i className="legend-hatched" />Travel/setup</span><span><i className="legend-free-dashed" />Free</span></div></section>
       <section className="day-tiles"><div className="overview-head"><div><span className="new-eyebrow">YOUR COURT ORDERS</span><h2>Today&apos;s matters</h2></div><span>{scheduled.length} scheduled</span></div><div className="order-tile-list">{result.decisions.map((decision) => {
         const task = caseData.tasks.find((item) => item.id === decision.task_id)
         const slot = result.schedule.find((item) => item.task_id === decision.task_id)
         if (!task) return null
-        return <div className="day-task-tile" key={task.id} role="button" tabIndex={0} aria-label={`Open court order for ${decision.effective_title}`} onClick={() => openOrder(task.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openOrder(task.id) } }}><TaskCharacter archetype={artFor(decision, caseData.tasks)} variant="on-duty" compact label={`${task.title}, on duty`} /><span className="tile-main"><strong>{decision.effective_title}</strong><small>{slot ? `${slot.start}–${slot.end}` : "Not scheduled today"}</small><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}{pardonIds.includes(task.id) && " · PARDONED"}</span></span>{decision.saved_min > 0 && <span className="tile-saved">SAVED {decision.saved_min} MIN</span>}<ArrowRight /></div>
+        return <div className="day-task-tile" key={task.id} role="button" tabIndex={0} aria-label={`Open court order for ${decision.effective_title}`} onClick={() => openOrder(task.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openOrder(task.id) } }}><TaskCharacter archetype={artFor(decision, caseData.tasks)} variant="on-duty" compact label={`${task.title}, on duty`} /><span className="tile-main"><strong>{decision.effective_title}</strong><small>{slot ? `${slot.start}–${slot.end}` : "Not scheduled today"}</small><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}{pardonIds.includes(task.id) && " · PARDONED"}</span></span>{decision.saved_min > 0 && <span className="tile-saved">SAVED {decision.saved_min} MIN</span>}{slot && decision.verdict !== "DISMISSED" && <button className="tile-start" onClick={(event) => { event.stopPropagation(); onStart(task.id) }}>▶ Start</button>}<ArrowRight /></div>
       })}</div></section>
     </div>
     {relations.length > 0 && <div className="sentence-relations"><span className="new-eyebrow">THE RELATIONSHIPS</span>{relations.map((relation) => <span key={`${relation.a}-${relation.b}`} className={`relation-${relation.type}`}>{relation.type === "ally" ? "🤝" : relation.type === "rival" ? "⚡" : "⛓"} {caseData.tasks.find((task) => task.id === relation.a)?.title} — {relation.reason}</span>)}</div>}
@@ -348,8 +354,8 @@ function artFor(decision: Decision, tasks: Task[]): Archetype {
   return local !== "note" ? local : decision.persona.archetype
 }
 
-function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onRevise, onClose, onCrossExamine }: {
-  task: Task; decision: Decision; slot?: TrialResult["schedule"][number]; caseData: Case; revision: ReviseResult | null; busy: boolean; error: string; onRevise: (instruction: string) => void; onClose: () => void; onCrossExamine: () => void
+function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onRevise, onClose, onCrossExamine, onStart }: {
+  task: Task; decision: Decision; slot?: TrialResult["schedule"][number]; caseData: Case; revision: ReviseResult | null; busy: boolean; error: string; onRevise: (instruction: string) => void; onClose: () => void; onCrossExamine: () => void; onStart: () => void
 }) {
   const reduceMotion = useReducedMotion()
   const [checked, setChecked] = useState<boolean[]>(decision.action_plan.map(() => false))
@@ -383,7 +389,7 @@ function CourtOrder({ task, decision, slot, caseData, revision, busy, error, onR
   return <div className="order-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><motion.aside className="court-order-sheet" role="dialog" aria-modal="true" aria-labelledby="order-title" initial={reduceMotion ? false : { opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }}>
     <div className="order-sheet-header"><button className="order-close" onClick={onClose} aria-label="Close court order"><X /></button><div className="order-hero-character"><TaskCharacter archetype={artFor(decision, caseData.tasks)} variant="on-duty" state="idle" label={`${task.title}, on duty`} /></div><div className="order-heading-copy"><span className="new-eyebrow">COURT ORDER NO. {task.id.toUpperCase()}</span><h2 id="order-title">{decision.effective_title}</h2><p>{slot ? `${slot.start}–${slot.end}` : "Unscheduled · make room when ready"} · {decision.approved_min} min approved</p><span className={`verdict-badge ${verdictTone[decision.verdict]}`}>{decision.verdict}</span>{decision.saved_min > 0 && <strong className="order-saved">SAVED {decision.saved_min} MIN</strong>}</div></div>
     {decision.cut_scope.length > 0 && <div className="not-today"><span>NOT TODAY</span><ul>{decision.cut_scope.map((item) => <li key={item}><s>{item}</s></li>)}</ul></div>}
-    <div className="order-sheet-body"><section className="first-move-card"><span>⚡ FIRST MOVE</span><p>{firstMove}</p><button onClick={() => { setFocus(true); setSeconds(60) }}><ArrowRight /> Start</button></section>
+    <div className="order-sheet-body"><section className="first-move-card"><span>⚡ FIRST MOVE</span><p>{firstMove}</p><button onClick={onStart}><ArrowRight /> Start</button></section>
       <section className="order-steps"><div className="order-steps-head"><span className="new-eyebrow">THE PLAN</span><h3>One step at a time.</h3></div>{actionPlan.map((step, index) => {
         const begin = cursor
         cursor += step.minutes
@@ -488,6 +494,27 @@ export default function TrialExperience() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The pardon could not be granted.") }
     finally { setBusy(false) }
   }
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(null)
+  // The task the user is working on now: highlighted on the timeline even after the focus room closes.
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
+  const focusTask = caseData.tasks.find((task) => task.id === focusTaskId) ?? null
+  const focusDecision = result?.decisions.find((decision) => decision.task_id === focusTaskId) ?? null
+  const startFocus = (id: string) => {
+    setFocusTaskId(id)
+    setActiveTaskId(id)
+    // Load the detailed order for this task if we don't have it yet.
+    if (result && revision?.task_id !== id && result.decisions.find((decision) => decision.task_id === id)?.verdict !== "DISMISSED") void askJudge(id, "detail")
+  }
+  /** Talking to the task during the session: a free-form question that never changes the schedule. */
+  const askTaskInFocus = async (taskId: string, question: string) => {
+    if (!result) return "The court has no record of this task yet."
+    try {
+      const response = await interrogate({ case: trialCase(), task_id: taskId, question_type: "free", question_text: question, previous_result: result, base_revision: result.revision })
+      return witnessLine(response)
+    } catch (cause) {
+      return cause instanceof Error ? cause.message : "The task could not answer right now."
+    }
+  }
   const openOrder = (id: string) => {
     setOrderTaskId(id)
     setRevision(null)
@@ -530,9 +557,15 @@ export default function TrialExperience() {
     <header className="new-court-header"><a className="new-brand" href="#top"><span className="new-brand-mark"><Gavel /></span><span><strong>Tasks on Trial</strong><small>The calendar starts empty. Your tasks must earn their place.</small></span></a><div className="header-recovered"><span>TIME RECOVERED</span><strong>{result?.metrics.minutes_recovered ?? 0}<small> MIN</small></strong></div><span className={`new-source-pill ${source.toLowerCase()}`}><i /> {source}</span></header>
     <main className="new-main" id="top"><nav className="new-stepper" aria-label="Trial stages">{(["docket", "courtroom", "sentence"] as const).map((step, index) => <button key={step} className={`${stage === step ? "active" : ""} ${index < (["docket", "courtroom", "sentence"].indexOf(stage)) ? "complete" : ""}`} onClick={() => { if (step === "docket") setStage("docket"); else if (result) setStage(step) }} disabled={step !== "docket" && !result}><span>{index + 1}</span>{step === "docket" ? "Docket" : step === "courtroom" ? "Courtroom" : "Sentence"}</button>)}</nav>
       {error && <div className="court-error global-error" role="alert"><span>{error}</span><button onClick={() => setError("")}>Dismiss</button></div>}
-      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} pardonIds={pardonIds} /></motion.div>}</AnimatePresence>
+      <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} onStart={startFocus} pardonIds={pardonIds} activeTaskId={activeTaskId} /></motion.div>}</AnimatePresence>
     </main><footer className="new-footer"><span>THE COURT OF A REASONABLE DAY</span><span>Nothing earns time by default.</span></footer>
     {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} />}
-    {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} />}
+    {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} onStart={() => { setOrderTaskId(null); startFocus(orderTask.id) }} />}
+    {focusTask && focusDecision && <FocusRoom key={focusTask.id} task={focusTask} decision={focusDecision} archetype={artFor(focusDecision, caseData.tasks)} slot={result?.schedule.find((slot) => slot.task_id === focusTask.id)}
+      plan={revision?.task_id === focusTask.id ? revision.action_plan : focusDecision.action_plan}
+      firstMove={(revision?.task_id === focusTask.id ? revision.first_move : focusDecision.first_move) ?? "Open the task and take the first small step."}
+      doneWhen={(revision?.task_id === focusTask.id ? revision.done_when : focusDecision.done_when) ?? "The agreed scope is complete."}
+      judgePresets={[...(JUDGE_PRESETS[artFor(focusDecision, caseData.tasks)] ?? JUDGE_PRESETS.note), "Different first move"]}
+      judgeBusy={reviseBusy} judgeError={reviseError} onAskTask={(question) => askTaskInFocus(focusTask.id, question)} onAskJudge={(instruction) => void askJudge(focusTask.id, instruction)} onClose={() => setFocusTaskId(null)} />}
   </div>
 }

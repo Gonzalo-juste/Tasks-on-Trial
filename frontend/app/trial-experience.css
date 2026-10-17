@@ -135,3 +135,65 @@
 .court-controls{display:flex;flex-wrap:wrap;gap:8px}
 .cross-plea{border:2px solid #c9a45c!important;background:#fff8e6!important;box-shadow:0 0 0 4px #c9a45c22;animation:plea-in .4s cubic-bezier(.2,1.4,.4,1)}
 @keyframes plea-in{from{opacity:0;transform:translateY(8px) scale(.97)}to{opacity:1;transform:none}}
+
+/* ---- Sentence: current phase, breaks, start buttons ---- */
+.time-block-new.is-current{z-index:3;color:#1f2f38!important;border:2px solid #e0bd6f!important;background:linear-gradient(135deg,#fff3cf,#f6d98f)!important;box-shadow:0 0 0 4px #e0bd6f55,0 8px 20px #6d4f2a40!important}
+.now-chip{position:absolute;top:4px;right:6px;padding:1px 6px;color:#fffaf0;border-radius:8px;background:#b7791f;font-size:9px;font-weight:900;letter-spacing:.12em;animation:now-pulse 1.6s ease-in-out infinite}
+@keyframes now-pulse{50%{box-shadow:0 0 0 5px #b7791f33}}
+.rest-band{position:absolute;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;color:#2f6b45;background:repeating-linear-gradient(45deg,#cfe8d5,#cfe8d5 4px,#e6f4ea 4px,#e6f4ea 8px);font-size:8px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.tile-start{margin-left:auto;padding:6px 12px;color:#2a1d0f;border:1px solid #8a6a3e;border-radius:4px;background:linear-gradient(#f4d996,#d8ae5c);box-shadow:0 2px 0 #6d4f2a;font-size:11px;font-weight:900;cursor:pointer}
+.tile-start:hover{transform:translateY(-1px)}
+
+/* ---- Focus room ---- */
+.focus-overlay{position:fixed;inset:0;z-index:60;overflow:auto;padding:22px 26px 30px;color:#fbf3df;background:radial-gradient(ellipse at 50% 0%,#f1d08e22,transparent 50%),linear-gradient(180deg,#1d3240,#122530)}
+.focus-close{position:absolute;top:16px;right:18px;width:38px;height:38px;display:grid;place-items:center;color:#fbf3df;border:1px solid #e2c27a66;border-radius:50%;background:#0f202999;cursor:pointer}
+.focus-header span{color:#d9c698;font-size:10px;font-weight:800;letter-spacing:.2em}
+.focus-header h2{margin:4px 0 2px;font:500 32px var(--font-court-serif),Georgia,serif}
+.focus-header p{margin:0;color:#cfc4ab;font-size:13px}
+.focus-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.2fr) minmax(0,.85fr);gap:18px;margin-top:18px}
+.focus-grid>section{padding:16px;border:1px solid #6c563e;border-radius:12px;background:#0f202980}
+.focus-task{display:flex;flex-direction:column;gap:10px}
+.focus-character{display:flex;justify-content:center}
+.focus-character .docket-character{width:150px;height:160px}
+.focus-character .character-illustration{filter:saturate(1.35) drop-shadow(0 0 14px #f6d48a55)!important}
+.focus-speech{position:relative;margin:0;padding:10px 14px;color:#1f2f38;border:2px solid #e2c27a;border-radius:14px;background:#fffaf0;font-size:14px;line-height:1.45}
+.focus-chat{max-height:170px;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px}
+.focus-chat p{margin:0;padding:6px 9px;border-radius:8px;font-size:12px;line-height:1.4}
+.focus-chat b{display:block;font-size:9px;letter-spacing:.12em;text-transform:uppercase;opacity:.75}
+.chat-you{align-self:flex-end;max-width:85%;color:#1f2f38;background:#e8dcc0}
+.chat-task{align-self:flex-start;max-width:90%;color:#fbf3df;background:#2b4352}
+.focus-quick,.focus-presets{display:flex;flex-wrap:wrap;gap:6px}
+.focus-quick button,.focus-presets button{padding:6px 10px;color:#1f2f38;border:1px solid #e2c27a;border-radius:14px;background:#fffaf0;font-size:11px;font-weight:700;cursor:pointer}
+.focus-quick button:disabled{opacity:.5}
+.focus-input{display:flex;gap:6px}
+.focus-input input{flex:1;min-width:0;padding:9px 11px;color:#1f2f38;border:1px solid #e2c27a;border-radius:8px;background:#fffaf0;font-size:13px}
+.focus-input button{width:40px;display:grid;place-items:center;color:#2a1d0f;border:0;border-radius:8px;background:#e0bd6f;cursor:pointer}
+.focus-input button:disabled{opacity:.45}
+.focus-clock{display:flex;flex-direction:column;align-items:center;gap:12px}
+.focus-phase-label{color:#d9c698;font-size:11px;font-weight:900;letter-spacing:.2em}
+.focus-ring{width:220px;height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:26px;text-align:center;border-radius:50%;background:radial-gradient(closest-side,#122530 82%,transparent 83% 100%),conic-gradient(#e0bd6f var(--progress),#ffffff1f 0)}
+.focus-ring strong{font:600 44px var(--font-court-serif),Georgia,serif}
+.focus-ring small{color:#e8dcc0;font-size:12px;line-height:1.3}
+.focus-detail{width:100%;padding:8px 12px;border-left:3px solid #e0bd6f;background:#ffffff0d;font-size:12px;line-height:1.45}
+.focus-detail p{margin:0}.focus-tip{margin-top:4px!important;color:#f2cf86}
+.focus-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.focus-controls button{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;color:#1f2f38;border:1px solid #e2c27a;border-radius:8px;background:#fffaf0;font-size:12px;font-weight:800;cursor:pointer}
+.focus-controls button svg{width:14px;height:14px}
+.focus-controls button.active{color:#fffaf0;background:#b7791f}
+.focus-phases{width:100%;margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.focus-phases li{display:grid;grid-template-columns:96px minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px 10px;border:1px solid #ffffff1f;border-radius:8px;font-size:12px}
+.focus-phases li span{color:#cfc4ab;font-variant-numeric:tabular-nums}
+.focus-phases li strong{display:flex;align-items:center;gap:6px}
+.focus-phases li strong svg{width:14px;color:#7fd39a}
+.focus-phases li small{color:#cfc4ab}
+.focus-phases .phase-current{color:#1f2f38;border-color:#e0bd6f;background:linear-gradient(135deg,#fff3cf,#f6d98f)}
+.focus-phases .phase-current span,.focus-phases .phase-current small{color:#5b4a2c}
+.focus-phases .phase-done{opacity:.55;text-decoration:line-through}
+.focus-phases .phase-next{opacity:.85}
+.focus-note{margin:0;color:#f2cf86;font-size:12px}
+.focus-judge{display:flex;flex-direction:column;gap:12px}
+.focus-judge-head{display:flex;align-items:center;gap:10px}
+.focus-judge-head .court-judge{width:90px}
+.focus-judge-head span{display:block;color:#d9c698;font-size:9px;font-weight:800;letter-spacing:.2em}
+.focus-judge-head strong{font:500 18px var(--font-court-serif),Georgia,serif}
+@media(max-width:1000px){.focus-grid{grid-template-columns:1fr}.focus-ring{width:180px;height:180px}}

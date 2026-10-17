@@ -158,7 +158,8 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     onCase({
       ...caseData,
       tasks: demo.tasks,
-      constitution: { ...caseData.constitution, start, end: "16:00", fixed_blocks: [], priorities },
+      // Lunch is a fixed commitment: the 4h budget stays discretionary, so the window grows by 30 minutes.
+      constitution: { ...caseData.constitution, start, end: "16:30", fixed_blocks: [{ start: "13:00", end: "13:30", label: "Lunch" }], priorities },
     })
   }
   const applyAnswer = (option: NonNullable<typeof question>["options"][number]) => {
