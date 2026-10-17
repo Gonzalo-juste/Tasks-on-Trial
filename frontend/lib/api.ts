@@ -73,8 +73,16 @@ const SEND_BUDGET = process.env.NEXT_PUBLIC_SEND_BUDGET === "true"
 
 export function caseToApi(caseData: Case): Case {
   const { budget_min: _omit, ...rest } = caseData
+  // The backend knows "quick" | "immediate"; standard and grand only change the frontend's pacing,
+  // and a grand trial asks for more drama.
+  const rules = rest.rules && {
+    ...rest.rules,
+    mode: rest.rules.mode === "immediate" ? "immediate" : "quick",
+    drama: rest.rules.mode === "grand" ? Math.max(rest.rules.drama, 0.85) : rest.rules.drama,
+  }
   return {
     ...rest,
+    ...(rules ? { rules: rules as Case["rules"] } : {}),
     ...(SEND_BUDGET ? { budget_min: grantedBudget(caseData) } : {}),
     tasks: caseData.tasks.map((task) => ({ ...task, deadline: task.deadline ? toIso(task.deadline) : null })),
     constitution: constitutionToApi(caseData.constitution),
@@ -118,6 +126,7 @@ export async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+  if (response.status === 409) throw new Error("The court has restarted since this trial. Convene the court again, then call the judge.")
   if (!response.ok) throw new Error(`The court could not complete the request (${response.status}). Please try again or use replay.`)
   return response.json() as Promise<T>
 }

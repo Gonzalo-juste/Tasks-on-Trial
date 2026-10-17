@@ -12,7 +12,19 @@ import type { Archetype, Case, Category, Task } from "@/lib/types"
 const chaoticDay = "Finish pitch slides 90 min due 6pm\nStudy for exam 90 min\nGym 60 min + 20 min travel\nReply to emails 30 min\nScroll TikTok 45 min"
 const prioritiesForDemo: Category[] = ["work", "learning", "health", "leisure", "money", "family", "other"]
 const priorityMarks: Record<Category, string> = { health: "✳", learning: "⌘", work: "▤", money: "£", family: "♡", leisure: "◌", other: "·" }
-const quickAddItems = ["Study", "Gym", "Emails", "Slides", "Chores", "Social"]
+const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }[] = [
+  { mode: "quick", label: "Quick trial", hint: "One round · ~25 s" },
+  { mode: "standard", label: "Standard trial", hint: "Time to read · ~45 s" },
+  { mode: "grand", label: "Grand trial", hint: "Full drama · ~70 s" },
+  { mode: "immediate", label: "Immediate sentence", hint: "Skip to the verdict" },
+]
+const quickAddItems: { label: string; line: string }[] = [
+  { label: "Study", line: "Study" }, { label: "Gym", line: "Gym" }, { label: "Emails", line: "Reply to emails" },
+  { label: "Slides", line: "Finish slides" }, { label: "Meeting", line: "Team meeting 30 min" }, { label: "Report", line: "Write report" },
+  { label: "Groceries", line: "Buy groceries" }, { label: "Laundry", line: "Laundry" }, { label: "Cook", line: "Cook dinner 45 min" },
+  { label: "Call family", line: "Call mum" }, { label: "Run", line: "Go for a run 30 min" }, { label: "Read", line: "Read a book 30 min" },
+  { label: "Errands", line: "Pharmacy errand" }, { label: "Social", line: "Scroll social media" },
+]
 const durationPresets = [{ label: "XS", minutes: 15 }, { label: "S", minutes: 30 }, { label: "M", minutes: 60 }, { label: "L", minutes: 120 }]
 
 function archetypeForTask(task: Task): Archetype {
@@ -173,7 +185,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
 
     <section className="quick-capture docket-paper budget-capture"><div className="new-section-head"><span className="new-section-icon"><Sparkles /></span><div><span>THE DOCKET</span><h2>{docket.length ? headline.defendants : "File today’s defendants"}</h2></div><span className="capture-note">ONE TASK PER LINE · PASTE FRIENDLY</span></div>
       <label className="sr-only" htmlFor="task-capture">File your tasks</label><textarea id="task-capture" value={rawText} onChange={(event) => onTextChange(event.target.value)} placeholder="Finish pitch slides by 6pm / Gym 60 min / Reply to emails / Study for exam / Scroll TikTok 45 min" rows={5} aria-label="File your tasks, one task per line" />
-      <div className="quick-add-row"><span>QUICK-ADD</span>{quickAddItems.map((item) => <button key={item} onClick={() => appendQuickAdd(item)}>+ {item}</button>)}<button className="chaotic-day-button" onClick={loadDemo}>Try a chaotic day</button></div>
+      <div className="quick-add-row"><span>QUICK-ADD</span>{quickAddItems.map((item) => <button key={item.label} onClick={() => appendQuickAdd(item.line)}>+ {item.label}</button>)}<button className="chaotic-day-button" onClick={loadDemo}>Try a chaotic day</button></div>
       <div className="docket-task-list" aria-live="polite">{currentBatch.map((task, index) => {
         const estimated = parsed.estimated[task.id] ?? []
         const durationIsEstimated = estimated.includes("duration_min") && !manualDurations.includes(task.id)
@@ -208,6 +220,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     {question && skippedQuestion !== question.id && <section className="single-witness-section"><div className="single-witness-icon" aria-hidden="true">⚖</div><div className="single-witness-content"><span className="new-eyebrow">ONE QUESTION FROM THE BENCH</span><h2>{question.question}</h2><div className="single-witness-options">{question.options.map((option) => <button key={option.label} disabled={answered} onClick={() => applyAnswer(option)}>{option.label}<ArrowRight /></button>)}{!answered && <button className="skip-witness-button" onClick={() => setSkippedQuestion(question.id)}>Skip question <ArrowRight /></button>}</div>{answered && <span className="witness-answer-confirmation"><Check /> The fact is in the record.</span>}</div></section>}
 
     {error && <div className="court-error" role="alert"><span>{error}</span><button onClick={() => setError("")}>Dismiss</button></div>}
+    <div className="trial-format" role="group" aria-label="Trial format"><span className="new-eyebrow">TRIAL FORMAT</span>{trialFormats.map((format) => <button key={format.mode} className={caseData.rules.mode === format.mode ? "active" : ""} aria-pressed={caseData.rules.mode === format.mode} onClick={() => onCase({ ...caseData, rules: { ...caseData.rules, mode: format.mode } })}><strong>{format.label}</strong><small>{format.hint}</small></button>)}</div>
     <div className="convene-row"><span>{docket.length ? headline.defendants : "Add a task to open the docket."}</span><button className="begin-trial-button" disabled={busy || docket.length === 0} onClick={() => { setError(""); onBegin() }}><Gavel /> {busy ? "The court is convening…" : "Convene the court"}<ArrowRight /></button></div>
     <span className="sr-only">The available scheduling window is {scheduleMinutes} minutes including commitments.</span>
   </section>

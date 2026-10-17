@@ -11,3 +11,41 @@
 @media(max-width:900px){.budget-priorities{grid-template-columns:1fr}.budget-priorities ol{grid-template-columns:repeat(4,minmax(0,1fr))}.budget-task-row{grid-template-columns:34px minmax(90px,1fr) auto}.budget-task-chips{grid-column:2/-1;justify-content:flex-start}.task-edit-button{grid-column:3;grid-row:1}.budget-task-editor{grid-column:1/-1}}
 @media(max-width:620px){.budget-first-panel{padding:15px 13px}.budget-first-top{display:block}.available-time-label{margin-top:12px;display:flex;align-items:center;gap:10px}.available-time-label span{margin:0;font-size:23px}.budget-controls-row{align-items:flex-start;flex-direction:column}.budget-presets{width:100%;gap:5px}.budget-preset{min-width:0;flex:1;padding-inline:7px}.budget-stepper{align-self:flex-end}.budget-meter-copy h3{font-size:14px}.budget-meter-copy{grid-template-columns:1fr}.budget-meter-copy>span{grid-row:3}.budget-meter-legend{flex-wrap:wrap}.budget-meter-legend strong{margin-left:0}.commitment-row{align-items:stretch;flex-wrap:wrap}.commitment-row label:first-child{flex-basis:100%}.schedule-start-row{align-items:flex-start;flex-wrap:wrap}.schedule-start-row span{flex-basis:100%;padding:0}.budget-capture{padding:13px 11px}.budget-capture textarea{min-height:98px;font-size:12px}.quick-add-row .chaotic-day-button{margin-left:0}.budget-task-row{grid-template-columns:31px minmax(0,1fr) auto;gap:6px}.budget-task-main strong{font-size:12px}.budget-task-chips{grid-column:2/-1;gap:4px}.task-edit-button{grid-column:3;grid-row:1}.budget-task-editor{grid-column:1/-1;gap:7px}.duration-presets{flex:1}.duration-presets button{flex:1}.budget-priorities{padding:12px}.budget-priorities ol{grid-template-columns:repeat(2,minmax(0,1fr))}.single-witness-section{padding:12px 10px;gap:9px}.single-witness-content h2{font-size:15px}.single-witness-options button{flex:1;justify-content:center}.convene-row{align-items:stretch;flex-direction:column}.convene-row .begin-trial-button{width:100%;min-width:0}.convene-row>span{text-align:center}.sentence-topline h1{font-size:clamp(31px,9vw,46px)}.granted-budget-stamp{top:-10px}}
 
+
+/* ---- Round 4 polish: colour, readable bubbles, loud verdicts, trial formats ---- */
+.court-scene .is-defendant .character-illustration{filter:saturate(1.35) brightness(1.08) drop-shadow(0 0 6px #f6d48a55)}
+.court-scene .queue-defendant .is-defendant .character-illustration{filter:saturate(1.15) drop-shadow(0 0 4px #f6d48a40)}
+.stand-witness>.docket-character .character-illustration{filter:saturate(1.5) brightness(1.12) drop-shadow(0 0 16px #ffe3a0aa)!important}
+.seated-character .character-illustration{filter:saturate(1.3) drop-shadow(0 0 5px #0006)!important}
+.court-bench.approved .seated-character .character-illustration{filter:saturate(1.35) drop-shadow(0 0 8px #7fd39a88)!important}
+.court-bench.reduced .seated-character .character-illustration{filter:saturate(1.35) drop-shadow(0 0 8px #f2c46a88)!important}
+.court-bench.dismissed .seated-character .character-illustration{filter:saturate(.8) drop-shadow(0 0 8px #e0786a88)!important}
+.defense-bubble,.prosecution-bubble{width:min(300px,44vw);position:absolute;top:-118px;z-index:9;padding:12px 14px;border-radius:14px;box-shadow:0 10px 28px #0007;font-size:13px;line-height:1.45}
+.defense-bubble{left:50%;transform:translateX(-15%);color:#1f2f38;border:2px solid #e2c27a;background:#fffaf0}
+.defense-bubble:after,.prosecution-bubble:after{content:"";position:absolute;bottom:-11px;width:18px;height:18px;transform:rotate(45deg)}
+.defense-bubble:after{left:22%;border-right:2px solid #e2c27a;border-bottom:2px solid #e2c27a;background:#fffaf0}
+.prosecution-bubble{right:-62%;color:#fff4ef;border:2px solid #ff8f7d;background:linear-gradient(135deg,#9b2f2b,#6e1f22)}
+.prosecution-bubble:after{right:26%;border-right:2px solid #ff8f7d;border-bottom:2px solid #ff8f7d;background:#7f2526}
+.defense-bubble span,.prosecution-bubble span{display:block;margin-bottom:3px;font-size:9px;font-weight:900;letter-spacing:.14em}
+.defense-bubble span{color:#a37a35}.prosecution-bubble span{color:#ffd0c6}
+.defense-bubble p,.prosecution-bubble p{margin:0}
+.verdict-overlay{position:absolute;top:50%;left:50%;z-index:12;width:min(560px,86%);padding:22px 26px;translate:-50% -50%;text-align:center;border:5px double currentColor;border-radius:10px;background:#fffaf0f2;box-shadow:0 0 0 999px #0b141a66,0 20px 50px #000a;pointer-events:none}
+.verdict-overlay small{display:block;color:#6b5b3e;font-size:11px;font-weight:800;letter-spacing:.16em}
+.verdict-overlay strong{display:block;margin:4px 0;font:900 clamp(44px,8vw,84px)/1 var(--font-court-sans),Arial,sans-serif;letter-spacing:.06em}
+.verdict-overlay span{display:block;color:#1f2f38;font-size:15px;font-weight:800;letter-spacing:.06em}
+.verdict-overlay p{margin:8px 0 0;color:#3c4a52;font-size:13px;line-height:1.45}
+.verdict-overlay.approved{color:#2f8a4f}.verdict-overlay.reduced{color:#b7791f}.verdict-overlay.dismissed{color:#b23b31}
+.scene-tone-approved{background:radial-gradient(ellipse at 50% 40%,#3fae6a66,transparent 60%),linear-gradient(180deg,#1f4a3a 0%,#163428 72%,#594337 72%,#3b2b27 100%)!important}
+.scene-tone-reduced{background:radial-gradient(ellipse at 50% 40%,#e3a94166,transparent 60%),linear-gradient(180deg,#4a3b1f 0%,#33281a 72%,#594337 72%,#3b2b27 100%)!important}
+.scene-tone-dismissed{background:radial-gradient(ellipse at 50% 40%,#d24a3d66,transparent 60%),linear-gradient(180deg,#4a1f22 0%,#331618 72%,#594337 72%,#3b2b27 100%)!important}
+.court-scene{transition:background .5s}
+.quick-add-row{flex-wrap:wrap;row-gap:6px}
+.trial-format{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin:18px 0 10px}
+.trial-format>.new-eyebrow{width:100%}
+.trial-format button{flex:1 1 140px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;text-align:left;color:#263844;border:1px solid #d8cdb6;border-radius:6px;background:#fffdf8;cursor:pointer}
+.trial-format button strong{font-size:13px}.trial-format button small{color:#7a7468;font-size:10px}
+.trial-format button.active{color:#fffaf0;border-color:#1f3442;background:#1f3442;box-shadow:0 0 0 3px #c9a45c55}
+.trial-format button.active small{color:#e8d7a8}
+.judge-presets button.preset-asked{color:#fffaf0;background:#1f3442}
+.revision-error{margin-top:8px;padding:8px 10px;color:#8a2a22;border:1px solid #e3a59c;border-radius:4px;background:#fff1ee;font-size:12px}
+@media(max-width:700px){.defense-bubble,.prosecution-bubble{width:62vw;top:-112px;font-size:11px}.prosecution-bubble{right:-20%}.verdict-overlay{padding:14px}.verdict-overlay span{font-size:12px}}

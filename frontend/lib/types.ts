@@ -25,7 +25,7 @@ export interface Constitution {
 }
 
 export interface Rules {
-  mode: "quick" | "immediate"
+  mode: "immediate" | "quick" | "standard" | "grand"
   severity: number
   drama: number
 }
