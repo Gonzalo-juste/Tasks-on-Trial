@@ -135,7 +135,7 @@ async function errorMessage(response: Response) {
   } catch {
     // Not JSON (e.g. a proxy error page): fall through to the generic text.
   }
-  if (code === "REVISION_CONFLICT") return "The court has restarted since this trial. Convene the court again, then try once more."
+  if (code === "REVISION_CONFLICT" && /expired|restarted/i.test(message)) return "The court has restarted since this trial. Reconvene the court to continue with the same case."
   if (message) return message
   return `The court could not complete the request (${response.status}). Please try again or use replay.`
 }

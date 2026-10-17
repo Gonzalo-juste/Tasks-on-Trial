@@ -21,6 +21,7 @@ interface FocusRoomProps {
   judgeError: string
   onAskTask: (question: string) => Promise<string>
   onAskJudge: (instruction: string) => void
+  onReconvene: () => Promise<void>
   onClose: () => void
 }
 
@@ -31,7 +32,7 @@ const clock = (value: number) => `${String(Math.floor(value / 60) % 24).padStart
 const mmss = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
 
 /** Working session for one task: its character coaches you, the clock runs per phase, the judge can rewrite the order. */
-export function FocusRoom({ task, decision, archetype, slot, plan, firstMove, doneWhen, judgePresets, judgeBusy, judgeError, onAskTask, onAskJudge, onClose }: FocusRoomProps) {
+export function FocusRoom({ task, decision, archetype, slot, plan, firstMove, doneWhen, judgePresets, judgeBusy, judgeError, onAskTask, onAskJudge, onReconvene, onClose }: FocusRoomProps) {
   const [stepIndex, setStepIndex] = useState(0)
   const [secondsLeft, setSecondsLeft] = useState((plan[0]?.minutes ?? 0) * 60)
   const [running, setRunning] = useState(true)
@@ -42,6 +43,7 @@ export function FocusRoom({ task, decision, archetype, slot, plan, firstMove, do
   const [thinking, setThinking] = useState(false)
   const [instruction, setInstruction] = useState("")
   const [planNote, setPlanNote] = useState("")
+  const [reconvening, setReconvening] = useState(false)
   const planKey = plan.map((step) => `${step.step}:${step.minutes}`).join("|")
   const firstPlan = useRef(planKey)
   const chatEnd = useRef<HTMLDivElement>(null)
@@ -100,7 +102,7 @@ export function FocusRoom({ task, decision, archetype, slot, plan, firstMove, do
       <section className="focus-task">
         <div className="focus-character"><TaskCharacter archetype={archetype} variant="on-duty" state={thinking ? "speaking" : running ? "idle" : "sitting"} label={`${task.title}, on duty`} /></div>
         <AnimatePresence mode="wait">{latestTaskLine && <motion.p key={latestTaskLine} className="focus-speech" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>{thinking ? "…" : latestTaskLine}</motion.p>}</AnimatePresence>
-        <div className="focus-chat" aria-live="polite">{chat.map((line, index) => <p key={index} className={`chat-${line.who}`}><b>{line.who === "you" ? "You" : decision.persona.name}</b>{line.text}</p>)}{thinking && <p className="chat-task"><b>{decision.persona.name}</b>…</p>}<div ref={chatEnd} /></div>
+        <div className="focus-chat" aria-live="polite">{chat.map((line, index) => <p key={index} className={`chat-${line.who}`}><b>{line.who === "you" ? "You" : decision.persona.name}</b>{line.text}</p>)}{thinking && <p className="chat-task"><b>{decision.persona.name}</b>…</p>}{/restarted/i.test(latestTaskLine ?? "") && <button className="focus-reconvene" disabled={reconvening} onClick={async () => { setReconvening(true); await onReconvene(); setReconvening(false); setChat((lines) => [...lines, { who: "task", text: "⚖ The court has reconvened with the same case. Ask me again." }]) }}>{reconvening ? "Reconvening…" : "⟳ Reconvene the court"}</button>}<div ref={chatEnd} /></div>
         <div className="focus-quick">{QUICK_QUESTIONS.map((text) => <button key={text} onClick={() => ask(text)} disabled={thinking}>{text}</button>)}</div>
         <form className="focus-input" onSubmit={(event) => { event.preventDefault(); void ask(question) }}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={`Ask ${task.title.toLowerCase()} about the plan…`} /><button disabled={!question.trim() || thinking} aria-label="Send question"><Send /></button></form>
       </section>

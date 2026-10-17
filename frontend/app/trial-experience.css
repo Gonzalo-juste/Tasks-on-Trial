@@ -197,3 +197,8 @@
 .focus-judge-head span{display:block;color:#d9c698;font-size:9px;font-weight:800;letter-spacing:.2em}
 .focus-judge-head strong{font:500 18px var(--font-court-serif),Georgia,serif}
 @media(max-width:1000px){.focus-grid{grid-template-columns:1fr}.focus-ring{width:180px;height:180px}}
+.focus-reconvene{align-self:flex-start;padding:6px 12px;color:#2a1d0f;border:1px solid #8a6a3e;border-radius:6px;background:linear-gradient(#f4d996,#d8ae5c);font-size:12px;font-weight:800;cursor:pointer}
+.deliberation-overlay{position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fbf3df;background:#0b141acc;backdrop-filter:blur(2px);text-align:center}
+.deliberation-overlay .court-judge{width:150px}
+.deliberation-overlay strong{font:500 30px var(--font-court-serif),Georgia,serif}
+.deliberation-overlay span{color:#e0bd6f;font-size:14px;font-weight:700;letter-spacing:.06em}

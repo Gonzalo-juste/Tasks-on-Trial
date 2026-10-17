@@ -14,6 +14,13 @@ import type { Archetype, Case, Decision, InitResult, InterrogationResult, Questi
 const verdictTone: Record<Verdict, string> = { APPROVED: "approved", REDUCED: "reduced", DISMISSED: "dismissed" }
 /** Display only: drop engine codes like "not_proven: " (the raw reason must go back to the backend unchanged). */
 const cleanReason = (reason: string) => reason.replace(/^[a-z_]+:\s*/, "")
+const CROSS_QUESTIONS: Partial<Record<QuestionType, string>> = {
+  purpose: "What are you really for, and why should you get time today?",
+  why_so_long: "Why do you need that much time? Break yourself into steps.",
+  why_today: "Why does this have to happen today?",
+  who_needs: "Who actually needs you done, and could someone else do it?",
+  minimal: "What is the smallest useful version of you?",
+}
 /** A bare "No comment." reads like a bug. Keep it, and let the witness point at its plea (no new facts are invented). */
 const witnessLine = (answer: InterrogationResult) => {
   const text = answer.answer.trim()
@@ -437,6 +444,22 @@ export default function TrialExperience() {
   const orderDecision = result?.decisions.find((decision) => decision.task_id === orderTaskId) ?? null
   const orderSlot = result?.schedule.find((slot) => slot.task_id === orderTaskId)
 
+  /** The backend lost its in-memory session (restart): judge the same case again and keep going. */
+  const reconvene = async () => {
+    const judged = trialCaseRef.current
+    if (!judged) return
+    setBusy(true)
+    setError("")
+    try {
+      const response = await run(judged)
+      setResult(response)
+      setReplay(null)
+      setSeenTrialId(response.request_id)
+      setSource(response.source === "live" ? "Live" : response.source === "replay" ? "Replay" : "Fallback")
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The court could not reconvene.")
+    } finally { setBusy(false) }
+  }
   const beginTrial = async () => {
     setBusy(true)
     setError("")
@@ -459,7 +482,21 @@ export default function TrialExperience() {
     if (!result || !currentTask || busy) return
     setBusy(true)
     try {
-      const response = await interrogate({ case: trialCase(), task_id: currentTask.id, question_type: type, question_text: null, previous_result: result, base_revision: result.revision })
+      const base = { case: trialCase(), task_id: currentTask.id, previous_result: result, base_revision: result.revision }
+      // Typed questions carry the plea logic but often come back as a bare "No comment." for tasks without facts.
+      // In that case ask the same thing as a free question so the witness actually answers in character.
+      const response = await interrogate({ ...base, question_type: type, question_text: null })
+      if (/^\s*no comment\.?\s*$/i.test(response.answer)) {
+        try {
+          const spoken = await interrogate({ ...base, question_type: "free", question_text: `${CROSS_QUESTIONS[type] ?? "Explain yourself."} Answer in character in one or two sentences; if you have no evidence, admit it but still answer.` })
+          if (spoken.answer.trim() && !/^\s*no comment/i.test(spoken.answer)) {
+            setCrossAnswer({ ...response, answer: spoken.answer, proposal: response.proposal ?? spoken.proposal })
+            return
+          }
+        } catch {
+          // Keep the typed answer if the follow-up fails.
+        }
+      }
       setCrossAnswer(response)
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The witness could not be heard.") }
     finally { setBusy(false) }
@@ -468,6 +505,10 @@ export default function TrialExperience() {
     // The backend only re-sentences with an accepted plea; a bare fact would replay the same verdict.
     if (!result || !currentTask || !crossAnswer?.proposal) return
     setBusy(true)
+    // Don't keep the user waiting on the sheet: back to the courtroom at once, the bench deliberates there.
+    setCrossTaskId(null)
+    setStage("courtroom")
+    setDeliberating(`Appeal of ${currentTask.title}`)
     try {
       const updated = await appeal({ case: trialCase(), task_id: currentTask.id, new_fact: fact.trim() || null, accepted_replacement: crossAnswer?.proposal ?? null, previous_result: result, base_revision: result.revision })
       setResult(updated)
@@ -478,11 +519,13 @@ export default function TrialExperience() {
       setSeenTrialId(updated.request_id)
       setStage("courtroom")
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The appeal could not be heard.") }
-    finally { setBusy(false) }
+    finally { setBusy(false); setDeliberating(null) }
   }
   const pardonTask = async (id: string) => {
     if (!result || pardonIds.length >= 2) return
     setBusy(true)
+    setStage("courtroom")
+    setDeliberating(`Pardon for ${caseData.tasks.find((task) => task.id === id)?.title ?? "the defendant"}`)
     try {
       const input: PardonInput = { case: trialCase(), task_id: id, previous_result: result, base_revision: result.revision, pardon: true }
       const updated = await pardon(input)
@@ -492,9 +535,11 @@ export default function TrialExperience() {
       setStage("courtroom")
       setPardonIds((previous) => [...previous, id])
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The pardon could not be granted.") }
-    finally { setBusy(false) }
+    finally { setBusy(false); setDeliberating(null) }
   }
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null)
+  // Shown over the courtroom while an appeal or pardon is being decided.
+  const [deliberating, setDeliberating] = useState<string | null>(null)
   // The task the user is working on now: highlighted on the timeline even after the focus room closes.
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const focusTask = caseData.tasks.find((task) => task.id === focusTaskId) ?? null
@@ -556,16 +601,17 @@ export default function TrialExperience() {
   return <div className="trial-app trial-experience">
     <header className="new-court-header"><a className="new-brand" href="#top"><span className="new-brand-mark"><Gavel /></span><span><strong>Tasks on Trial</strong><small>The calendar starts empty. Your tasks must earn their place.</small></span></a><div className="header-recovered"><span>TIME RECOVERED</span><strong>{result?.metrics.minutes_recovered ?? 0}<small> MIN</small></strong></div><span className={`new-source-pill ${source.toLowerCase()}`}><i /> {source}</span></header>
     <main className="new-main" id="top"><nav className="new-stepper" aria-label="Trial stages">{(["docket", "courtroom", "sentence"] as const).map((step, index) => <button key={step} className={`${stage === step ? "active" : ""} ${index < (["docket", "courtroom", "sentence"].indexOf(stage)) ? "complete" : ""}`} onClick={() => { if (step === "docket") setStage("docket"); else if (result) setStage(step) }} disabled={step !== "docket" && !result}><span>{index + 1}</span>{step === "docket" ? "Docket" : step === "courtroom" ? "Courtroom" : "Sentence"}</button>)}</nav>
-      {error && <div className="court-error global-error" role="alert"><span>{error}</span><button onClick={() => setError("")}>Dismiss</button></div>}
+      {error && <div className="court-error global-error" role="alert"><span>{error}</span>{/restarted/i.test(error) && <button onClick={() => void reconvene()}>Reconvene the court</button>}<button onClick={() => setError("")}>Dismiss</button></div>}
       <AnimatePresence mode="wait">{stage === "docket" && <motion.div key="docket" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.25 }}><DocketIntake caseData={caseData} onCase={setCaseData} rawText={docketText} onRawText={setDocketText} onBegin={beginTrial} busy={busy} error={error} setError={setError} /></motion.div>}{stage === "courtroom" && result && <motion.div key="courtroom" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}><Courtroom key={`court-${replayAllKey}`} result={result} caseData={caseData} relations={initData?.relations ?? []} startSeated={seenTrialId === result.request_id} onPlayed={() => setSeenTrialId(result.request_id)} onReplayAll={() => { setSeenTrialId(null); setReplay(null); setReplayAllKey((value) => value + 1) }} onSeeDay={() => { setReplay(null); setStage("sentence") }} onCrossExamine={openCross} onPardon={pardonTask} onCallJudge={openOrder} onAppeal={openCross} pardonsUsed={pardonIds.length} busy={busy} replay={replay} /></motion.div>}{stage === "sentence" && result && <motion.div key="sentence" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}><Sentence result={result} caseData={caseData} relations={initData?.relations ?? []} onBack={() => setStage("courtroom")} onCrossExamine={openCross} openOrder={openOrder} onStart={startFocus} pardonIds={pardonIds} activeTaskId={activeTaskId} /></motion.div>}</AnimatePresence>
     </main><footer className="new-footer"><span>THE COURT OF A REASONABLE DAY</span><span>Nothing earns time by default.</span></footer>
     {crossTaskId && currentTask && <CrossExamination task={currentTask} decision={result?.decisions.find((decision) => decision.task_id === crossTaskId)} busy={busy} answer={crossAnswer} onAsk={askCross} onAppeal={appealTask} onClose={() => setCrossTaskId(null)} />}
     {orderTask && orderDecision && <CourtOrder task={orderTask} decision={orderDecision} slot={orderSlot} caseData={caseData} revision={revision} busy={reviseBusy} error={reviseError} onRevise={reviseOrder} onClose={() => setOrderTaskId(null)} onCrossExamine={() => { setOrderTaskId(null); openCross(orderTask.id) }} onStart={() => { setOrderTaskId(null); startFocus(orderTask.id) }} />}
+    <AnimatePresence>{deliberating && <motion.div className="deliberation-overlay" role="status" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><JudgeCharacter striking /><strong>The court is deliberating…</strong><span>{deliberating}</span></motion.div>}</AnimatePresence>
     {focusTask && focusDecision && <FocusRoom key={focusTask.id} task={focusTask} decision={focusDecision} archetype={artFor(focusDecision, caseData.tasks)} slot={result?.schedule.find((slot) => slot.task_id === focusTask.id)}
       plan={revision?.task_id === focusTask.id ? revision.action_plan : focusDecision.action_plan}
       firstMove={(revision?.task_id === focusTask.id ? revision.first_move : focusDecision.first_move) ?? "Open the task and take the first small step."}
       doneWhen={(revision?.task_id === focusTask.id ? revision.done_when : focusDecision.done_when) ?? "The agreed scope is complete."}
       judgePresets={[...(JUDGE_PRESETS[artFor(focusDecision, caseData.tasks)] ?? JUDGE_PRESETS.note), "Different first move"]}
-      judgeBusy={reviseBusy} judgeError={reviseError} onAskTask={(question) => askTaskInFocus(focusTask.id, question)} onAskJudge={(instruction) => void askJudge(focusTask.id, instruction)} onClose={() => setFocusTaskId(null)} />}
+      judgeBusy={reviseBusy} judgeError={reviseError} onReconvene={reconvene} onAskTask={(question) => askTaskInFocus(focusTask.id, question)} onAskJudge={(instruction) => void askJudge(focusTask.id, instruction)} onClose={() => setFocusTaskId(null)} />}
   </div>
 }

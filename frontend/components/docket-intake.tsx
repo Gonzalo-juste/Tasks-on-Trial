@@ -157,7 +157,8 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     setSkippedQuestion(null)
     onCase({
       ...caseData,
-      tasks: demo.tasks,
+      // Slides can be trimmed to a 70-minute core: with slides and study both locked at 90 nothing else would fit.
+      tasks: demo.tasks.map((task) => task.id === "finish-pitch" ? { ...task, minimum_min: 70, allow_reduction: true } : task),
       // Lunch is a fixed commitment: the 4h budget stays discretionary, so the window grows by 30 minutes.
       constitution: { ...caseData.constitution, start, end: "16:30", fixed_blocks: [{ start: "13:00", end: "13:30", label: "Lunch" }], priorities },
     })
