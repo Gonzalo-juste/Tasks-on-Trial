@@ -8,9 +8,9 @@ from .errors import ApiError
 from .nebius_client import NebiusClient, ProviderFailure
 from .schemas import (RunRequest, TrialResult, InterrogateRequest, InterrogateResult,
     AppealRequest, Meta, Change, Recommendation, RunProposal, validate_case,
-    InitRequest, ReviseRequest, ReviseResult, RevisedOrder, DetailedStep)
+    InitRequest, ReviseRequest, ReviseResult, RevisedOrder, DetailedStep, Release)
 from .state import StateStore, fingerprint
-from .tribunal import build_result, accepted_decision, make_proposal, decide, fallback_recommendation
+from .tribunal import build_result, accepted_decision, make_proposal, decide, fallback_recommendation, fit_recommendations_to_budget
 from .intake import lines_for, prepare
 from .validation import verify_result
 
@@ -193,6 +193,11 @@ class TrialService:
             if cached:
                 return cached
             session = self.store.current(request,root)
+            if request.merge_task_ids and (request.pardon or not request.accepted_replacement):
+                raise ApiError('INVALID_INPUT', 'A pact requires an accepted replacement and cannot be a pardon.', ['merge_task_ids'])
+            target_decision = next(d for d in session.result.decisions if d.task_id == request.task_id)
+            if target_decision.merged_into:
+                raise ApiError('INVALID_INPUT', 'This task is already part of a pact. Start a new trial to separate it.', ['task_id'])
             if request.pardon:
                 if request.accepted_replacement is not None:
                     raise ApiError('INVALID_INPUT', 'Choose either a pardon or a replacement.', ['pardon'])
@@ -229,6 +234,18 @@ class TrialService:
             self.store.ensure_new_result_id(request.request_id)
             task = next(t for t in session.case.tasks if t.id == request.task_id)
             replacement = request.accepted_replacement
+            merge_ids = set(request.merge_task_ids)
+            tasks = {t.id:t for t in session.case.tasks}
+            if (len(merge_ids) != len(request.merge_task_ids) or task.id in merge_ids or not merge_ids <= tasks.keys()):
+                raise ApiError('INVALID_INPUT', 'Merge IDs must be distinct existing tasks other than the appealed task.', ['merge_task_ids'])
+            if any(tasks[x].mandatory or tasks[x].category != task.category for x in merge_ids):
+                raise ApiError('INVALID_INPUT', 'A pact can only merge non-mandatory tasks in the same category.', ['merge_task_ids'])
+            if any(t.depends_on and (merge_ids.intersection(t.depends_on) or t.id in merge_ids) for t in session.case.tasks):
+                raise ApiError('INVALID_INPUT', 'Tasks with dependency links cannot be merged in this version.', ['merge_task_ids'])
+            if any(d.merged_into or any(x.merged_into == d.task_id for x in session.result.decisions) for d in session.result.decisions if d.task_id in merge_ids):
+                raise ApiError('INVALID_INPUT', 'A task already in a pact cannot be merged again.', ['merge_task_ids'])
+            if replacement.buffer_min is not None and replacement.buffer_min > task.buffer_min:
+                raise ApiError('INVALID_INPUT', 'A replacement cannot increase the original buffer.', ['accepted_replacement.buffer_min'])
             if not task.minimum_min <= replacement.duration_min <= task.duration_min:
                 raise ApiError('INVALID_INPUT', 'Replacement must respect the confirmed minimum and duration.', ['accepted_replacement.duration_min'])
             if replacement.duration_min == task.duration_min and replacement.title != task.title:
@@ -244,7 +261,12 @@ class TrialService:
             settings = Settings.load()
             source, meta = 'live', Meta()
             replay = settings.mode == 'replay' and demo_case_matches(session.case)
-            if replay:
+            if merge_ids:
+                source = 'fallback'  # Explicit user acceptance; no model call is needed.
+                old.defense = f'I accept {replacement.duration_min} minutes for {replacement.title}.'[:200]
+                old.prosecution = 'The accepted pact replaces separate work and removes the duplicate commute.'
+                old.exchanges = []
+            elif replay:
                 if not (task.id == 'instagram' and replacement.title == 'Screen-free break'
                         and replacement.duration_min == 15 and replacement.need == 'rest'):
                     raise ApiError('REPLAY_CASE_MISMATCH','This accepted replacement has no prepared replay.', ['accepted_replacement'])
@@ -265,6 +287,27 @@ class TrialService:
                     old.prosecution = 'The court applies your explicitly accepted replacement; live assessment is unavailable.'
             decisions[index] = accepted_decision(task, old, replacement)
             categories = {d.task_id:'health' for d in decisions if d.suggested_need and d.suggested_need.status == 'confirmed' and d.suggested_need.need.lower() == 'rest'}
+            if merge_ids:
+                pact_reason = ('Pact accepted: running to the gym replaces the commute; two tasks become one.'
+                    if 'gym' in task.title.lower() and any('run' in tasks[x].title.lower() for x in merge_ids)
+                    else f'Pact accepted: {replacement.title}; separate tasks become one accepted plan.'[:500])
+                decisions[index].reason = pact_reason
+                for merged in decisions:
+                    if merged.task_id in merge_ids:
+                        original = tasks[merged.task_id]
+                        merged.verdict, merged.approved_min = 'DISMISSED', 0
+                        merged.saved_min = original.duration_min + original.buffer_min
+                        merged.merged_into = task.id
+                        merged.reason = f'merged into {replacement.title}'[:500]
+                        merged.first_move, merged.action_plan, merged.done_when = None, [], None
+                        merged.release = Release(action='drop', note=f'Included in {replacement.title}.'[:500])
+                        merged.schedule_status, merged.pending_reason = 'NOT_APPLICABLE', None
+                # Lock the accepted scope and keep folded work out of budget refill.
+                fitting_case = case.model_copy(deep=True)
+                for item in fitting_case.tasks:
+                    if item.id == task.id:
+                        item.mandatory = True
+                fit_recommendations_to_budget(fitting_case, decisions, categories)
             result = build_result(case,None,request.request_id,source,meta,
                 revision=session.result.revision+1,appeals_used=1,decisions=decisions,categories=categories)
             result.change = Change(task_id=task.id,previous_verdict=old.verdict,
@@ -272,6 +315,10 @@ class TrialService:
                 previous_minutes_recovered=session.result.metrics.minutes_recovered,
                 delta_minutes_recovered=result.metrics.minutes_recovered-session.result.metrics.minutes_recovered,
                 new_fact=request.new_fact)
+            if merge_ids:
+                if next(d for d in result.decisions if d.task_id == task.id).schedule_status != 'SCHEDULED' or result.metrics.pending_min:
+                    raise ApiError('INVALID_INPUT', 'The pact does not fit the confirmed calendar. No changes were saved.', ['accepted_replacement'])
+                result.judge_summary = pact_reason[:200]
             if request.new_fact:
                 session.facts.setdefault(task.id,[]).append(request.new_fact)
             self.store.update(root,result)

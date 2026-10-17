@@ -4,6 +4,10 @@ from zoneinfo import ZoneInfo
 from .schemas import Case, Decision, ScheduleSlot, Metrics, Conflict
 
 
+def effective_buffer(task, decision):
+    return task.buffer_min if decision.buffer_min is None else decision.buffer_min
+
+
 def free_intervals(case: Case) -> list[tuple[datetime, datetime]]:
     c = case.constitution
     start, end = c.start.astimezone(timezone.utc), c.end.astimezone(timezone.utc)
@@ -103,12 +107,12 @@ def _plan_greedy(case: Case, decisions: list[Decision], categories=None, rests=N
         d.schedule_status = 'PENDING'
         if any(dep not in scheduled for dep in task.depends_on):
             d.pending_reason = 'depends_unmet'
-        elif d.approved_min + task.buffer_min + rest > remaining_budget:
+        elif d.approved_min + effective_buffer(task,d) + rest > remaining_budget:
             d.pending_reason = 'no_fit'
         else:
             earliest = max([case.constitution.start.astimezone(timezone.utc)] +
                            [scheduled[dep].end.astimezone(timezone.utc) for dep in task.depends_on])
-            duration = timedelta(minutes=d.approved_min + task.buffer_min + rest)
+            duration = timedelta(minutes=d.approved_min + effective_buffer(task,d) + rest)
             fits_without_deadline = False
             for i, (left, right) in enumerate(free):
                 begin = max(left, earliest)
@@ -118,7 +122,7 @@ def _plan_greedy(case: Case, decisions: list[Decision], categories=None, rests=N
                 fits_without_deadline = True
                 if task.deadline is not None and finish-timedelta(minutes=rest) > task.deadline:
                     continue
-                scheduled[task.id] = ScheduleSlot(task_id=task.id, start=begin.astimezone(zone), end=finish.astimezone(zone), buffer_min=task.buffer_min,rest_after_min=rest)
+                scheduled[task.id] = ScheduleSlot(task_id=task.id, start=begin.astimezone(zone), end=finish.astimezone(zone), buffer_min=effective_buffer(task,d),rest_after_min=rest)
                 replacement = []
                 if left < begin:
                     replacement.append((left, begin))
@@ -126,7 +130,7 @@ def _plan_greedy(case: Case, decisions: list[Decision], categories=None, rests=N
                     replacement.append((finish, right))
                 free[i:i+1] = replacement
                 d.schedule_status = 'SCHEDULED'
-                remaining_budget -= d.approved_min + task.buffer_min + rest
+                remaining_budget -= d.approved_min + effective_buffer(task,d) + rest
                 break
             if d.schedule_status == 'PENDING':
                 d.pending_reason = 'deadline' if task.deadline and fits_without_deadline else 'no_fit'
@@ -137,11 +141,11 @@ def _plan_greedy(case: Case, decisions: list[Decision], categories=None, rests=N
     if verify:
         verify_schedule(case, decisions, schedule)
     original = sum(t.duration_min + t.buffer_min for t in case.tasks)
-    approved = sum(d.approved_min + (tasks[d.task_id].buffer_min if d.verdict != 'DISMISSED' else 0) for d in decisions)
+    approved = sum(d.approved_min + (effective_buffer(tasks[d.task_id],d) if d.verdict != 'DISMISSED' else 0) for d in decisions)
     metrics = Metrics(original_min=original, approved_min=approved,
         minutes_recovered=original-approved,
-        pending_min=sum(d.approved_min + tasks[d.task_id].buffer_min for d in decisions if d.schedule_status == 'PENDING'),
-        free_capacity_min=usable-sum(d.approved_min + tasks[d.task_id].buffer_min for d in decisions if d.schedule_status == 'SCHEDULED')-sum(s.rest_after_min for s in schedule))
+        pending_min=sum(d.approved_min + effective_buffer(tasks[d.task_id],d) for d in decisions if d.schedule_status == 'PENDING'),
+        free_capacity_min=usable-sum(d.approved_min + effective_buffer(tasks[d.task_id],d) for d in decisions if d.schedule_status == 'SCHEDULED')-sum(s.rest_after_min for s in schedule))
     return schedule, metrics, conflicts
 
 
@@ -163,11 +167,11 @@ def verify_schedule(case: Case, decisions: list[Decision], schedule: list[Schedu
         if previous_end and slot.start < previous_end:
             raise ValueError('Schedule overlap.')
         previous_end = slot.end
-        if slot.buffer_min != task.buffer_min:
+        if slot.buffer_min != effective_buffer(task,decision):
             raise ValueError('Scheduled buffer does not match task.')
         if slot.rest_after_min != expected_rest(case,slot,ordered_slots[i+1] if i+1 < len(ordered_slots) else None):
             raise ValueError('Incorrect break after task.')
-        if int((slot.end-slot.start).total_seconds()) != (decision.approved_min+task.buffer_min+slot.rest_after_min)*60:
+        if int((slot.end-slot.start).total_seconds()) != (decision.approved_min+effective_buffer(task,decision)+slot.rest_after_min)*60:
             raise ValueError('Scheduled minutes do not match decision.')
         if task.deadline and slot.end-timedelta(minutes=slot.rest_after_min) > task.deadline:
             raise ValueError('Deadline violated.')

@@ -99,6 +99,8 @@ class Exchange(Model):
     text: Annotated[str, Field(min_length=1, max_length=200)]
 
 class Decision(Model):
+    buffer_min: Annotated[StrictInt, Field(ge=0, le=1440)] | None = Field(default=None, exclude_if=lambda v: v is None)
+    merged_into: str | None = Field(default=None, exclude_if=lambda v: v is None)
     task_id: str
     persona: Persona
     defense: Annotated[str, Field(max_length=240)]
@@ -175,6 +177,7 @@ class InterrogateRequest(PreviousRequest):
     question_text: Annotated[str, Field(min_length=1, max_length=500)] | None = None
 
 class Replacement(Model):
+    buffer_min: Annotated[StrictInt, Field(ge=0, le=1440)] | None = Field(default=None, exclude_if=lambda v: v is None)
     title: Text
     duration_min: PositiveMinutes
     need: Text | None = None
@@ -207,6 +210,7 @@ class InterrogateResult(Envelope):
     proposal: Proposal | None = None
 
 class AppealRequest(PreviousRequest):
+    merge_task_ids: Annotated[list[str], Field(max_length=5)] = Field(default_factory=list, exclude_if=lambda v: not v)
     pardon: Annotated[bool, Field(strict=True)] = False
     new_fact: Text | None = None
     accepted_replacement: Replacement | None = None

@@ -2,7 +2,7 @@
 import re
 from .schemas import (Task, Case, Decision, Persona, PlanStep, Release, Need, Recommendation,
                        RunProposal, TrialResult, Meta, Replacement, Proposal, Conflict)
-from .scheduler import plan, effective_budget
+from .scheduler import plan, effective_budget, effective_buffer
 from .validation import verify_result
 from .presentation import character, natural_language
 from .evaluation import burden_score
@@ -124,7 +124,7 @@ NEED_CATEGORIES = {'work', 'health', 'learning', 'family', 'money'}
 def allocate_work(task, decision, minutes, reason):
     """Change one allocation and rebuild every time-dependent court-order field."""
     decision.verdict = 'APPROVED' if minutes == task.duration_min else 'REDUCED'
-    decision.approved_min, decision.saved_min = minutes, task.duration_min-minutes
+    decision.approved_min, decision.saved_min = minutes, task.duration_min-minutes+task.buffer_min-effective_buffer(task,decision)
     decision.reason = reason[:500]
     decision.cut_scope = [] if minutes == task.duration_min else ['Scope beyond the approved time is deferred.']
     decision.first_move, decision.action_plan, decision.done_when = consistent_order(
@@ -144,7 +144,7 @@ def refill_allocations(case, decisions, scores, ceilings, cut_ids, categories):
         trial = [d.model_copy(deep=True) for d in decisions]
         candidate = next(d for d in trial if d.task_id == task.id)
         allocate_work(task,candidate,minutes,'budget_refill: Restored within available time after higher-priority work; calendar validated.')
-        if sum(d.approved_min+tasks[d.task_id].buffer_min for d in trial if d.verdict != 'DISMISSED') > budget:
+        if sum(d.approved_min+effective_buffer(tasks[d.task_id],d) for d in trial if d.verdict != 'DISMISSED') > budget:
             return False
         plan(case,trial,categories)
         if any(d.verdict != 'DISMISSED' and d.schedule_status != 'SCHEDULED' for d in trial):
@@ -159,7 +159,7 @@ def refill_allocations(case, decisions, scores, ceilings, cut_ids, categories):
         changed = False
         for task in ordered:
             decision = next(d for d in decisions if d.task_id == task.id)
-            if decision.verdict != 'DISMISSED':
+            if decision.verdict != 'DISMISSED' or decision.merged_into:
                 continue
             category = categories.get(task.id,task.category)
             if category == 'leisure' and not scores[task.id].supporting:
@@ -189,7 +189,7 @@ def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categor
         scores[t.id].total,t.id))
     budget = effective_budget(case)
     def load():
-        return sum(d.approved_min+tasks[d.task_id].buffer_min for d in decisions if d.verdict != 'DISMISSED')
+        return sum(d.approved_min+effective_buffer(tasks[d.task_id],d) for d in decisions if d.verdict != 'DISMISSED')
     def needs_cuts():
         if not case.constitution.break_min:
             return load() > budget
@@ -257,7 +257,7 @@ def build_result(case: Case, proposal: RunProposal | None, request_id: str, sour
         populate_exchanges(case, decisions, include_fallback=source == 'fallback')
     schedule, metrics, conflicts = plan(case, decisions, categories)
     tasks = {t.id: t for t in case.tasks}
-    mandatory_load = sum(d.approved_min + tasks[d.task_id].buffer_min
+    mandatory_load = sum(d.approved_min + effective_buffer(tasks[d.task_id],d)
                          for d in decisions if tasks[d.task_id].mandatory)
     if mandatory_load > effective_budget(case):
         conflicts.append(Conflict(code='impossible_as_filed',
@@ -295,11 +295,13 @@ def accepted_decision(task: Task, old: Decision, replacement: Replacement) -> De
     if exchanges:
         exchanges[0].text = natural_language(old.defense)[:200]
         exchanges[1].text = natural_language(old.prosecution)[:200]
+    buffer = effective_buffer(task,old) if replacement.buffer_min is None else replacement.buffer_min
     return old.model_copy(update={
+        'buffer_min':buffer if replacement.buffer_min is not None or old.buffer_min is not None else None,
         'defense':natural_language(old.defense), 'prosecution':natural_language(old.prosecution),
         'exchanges':exchanges,
         'verdict':'REDUCED' if minutes < task.duration_min else 'APPROVED',
-        'approved_min':minutes, 'saved_min':task.duration_min-minutes,
+        'approved_min':minutes, 'saved_min':task.duration_min-minutes+task.buffer_min-buffer,
         'effective_title':replacement.title,
         'reason':'Replacement explicitly accepted by the user; confirmed minimum preserved.',
         'cut_scope':replacement.cut_scope,

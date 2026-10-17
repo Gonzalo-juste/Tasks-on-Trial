@@ -1,6 +1,6 @@
 """Independent conservation checks on the final public result."""
 from .schemas import Case, TrialResult
-from .scheduler import effective_budget, verify_schedule
+from .scheduler import effective_budget, verify_schedule, effective_buffer
 from .courtroom import round_count, validate_exchanges
 
 
@@ -11,9 +11,15 @@ def verify_result(case: Case, result: TrialResult) -> None:
         raise ValueError('Result must contain each input task exactly once.')
     for d in result.decisions:
         task = tasks[d.task_id]
+        if d.merged_into:
+            if d.merged_into not in tasks or d.merged_into == d.task_id or d.verdict != 'DISMISSED':
+                raise ValueError('Invalid merged task.')
+            target = next(x for x in result.decisions if x.task_id == d.merged_into)
+            if target.verdict == 'DISMISSED' or target.merged_into:
+                raise ValueError('Merged task needs a retained target.')
         if d.exchanges:
             validate_exchanges(d.exchanges,round_count(case),d.defense,d.prosecution)
-        saved = task.duration_min - d.approved_min + (task.buffer_min if d.verdict == 'DISMISSED' else 0)
+        saved = task.duration_min - d.approved_min + (task.buffer_min if d.verdict == 'DISMISSED' else task.buffer_min-effective_buffer(task,d))
         if d.original_min != task.duration_min or d.saved_min != saved:
             raise ValueError('Per-task minutes are inconsistent.')
         if d.verdict == 'DISMISSED':
@@ -39,10 +45,10 @@ def verify_result(case: Case, result: TrialResult) -> None:
     verify_schedule(case,result.decisions,result.schedule)
     m = result.metrics
     original = sum(t.duration_min + t.buffer_min for t in case.tasks)
-    approved = sum(d.approved_min + (tasks[d.task_id].buffer_min if d.verdict != 'DISMISSED' else 0) for d in result.decisions)
+    approved = sum(d.approved_min + (effective_buffer(tasks[d.task_id],d) if d.verdict != 'DISMISSED' else 0) for d in result.decisions)
     usable = effective_budget(case)
-    scheduled = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions if d.schedule_status == 'SCHEDULED')
-    pending = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions if d.schedule_status == 'PENDING')
+    scheduled = sum(d.approved_min + effective_buffer(tasks[d.task_id],d) for d in result.decisions if d.schedule_status == 'SCHEDULED')
+    pending = sum(d.approved_min + effective_buffer(tasks[d.task_id],d) for d in result.decisions if d.schedule_status == 'PENDING')
     expected = (original,approved,original-approved,pending,usable-scheduled-sum(s.rest_after_min for s in result.schedule))
     observed = (m.original_min,m.approved_min,m.minutes_recovered,m.pending_min,m.free_capacity_min)
     if observed != expected or sum(d.saved_min for d in result.decisions) != m.minutes_recovered:
@@ -51,7 +57,7 @@ def verify_result(case: Case, result: TrialResult) -> None:
     conflict_ids = {task_id for c in result.conflicts for task_id in c.task_ids}
     if bool(mandatory_pending) != (result.status == 'conflict') or not mandatory_pending <= conflict_ids:
         raise ValueError('Mandatory scheduling conflicts are not correctly exposed.')
-    mandatory_load = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions
+    mandatory_load = sum(d.approved_min + effective_buffer(tasks[d.task_id],d) for d in result.decisions
                          if tasks[d.task_id].mandatory)
     impossible = any(c.code == 'impossible_as_filed' for c in result.conflicts)
     if impossible != (mandatory_load > usable):
