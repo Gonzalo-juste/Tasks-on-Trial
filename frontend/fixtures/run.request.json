@@ -1,0 +1,43 @@
+{
+  "request_id": "run-01",
+  "api_version": "1",
+  "confirmed": true,
+  "case": {
+    "tasks": [
+      {
+        "id": "maths", "title": "Study maths", "duration_min": 120, "minimum_min": 120,
+        "mandatory": true, "deadline": null, "depends_on": [], "category": "learning",
+        "allow_reduction": false, "facts": ["Maths exam on Monday"]
+      },
+      {
+        "id": "gym", "title": "Go to the gym", "duration_min": 60, "minimum_min": 30,
+        "mandatory": false, "deadline": null, "depends_on": [], "category": "health",
+        "allow_reduction": true, "facts": []
+      },
+      {
+        "id": "emails", "title": "Answer emails", "duration_min": 60, "minimum_min": 15,
+        "mandatory": false, "deadline": null, "depends_on": [], "category": "work",
+        "allow_reduction": true, "facts": ["Only five emails need a reply today"]
+      },
+      {
+        "id": "presentation", "title": "Prepare presentation", "duration_min": 120, "minimum_min": 90,
+        "mandatory": false, "deadline": null, "depends_on": [], "category": "work",
+        "allow_reduction": true, "facts": ["Presenting on Monday", "Only the core slides are essential; animations are optional"]
+      },
+      {
+        "id": "instagram", "title": "Check Instagram", "duration_min": 45, "minimum_min": 15,
+        "mandatory": false, "deadline": null, "depends_on": [], "category": "leisure",
+        "allow_reduction": true, "facts": ["I usually scroll when I am tired"]
+      }
+    ],
+    "constitution": {
+      "timezone": "Europe/London",
+      "start": "2026-10-17T09:00:00+01:00",
+      "end": "2026-10-17T18:00:00+01:00",
+      "fixed_blocks": [
+        { "start": "2026-10-17T13:00:00+01:00", "end": "2026-10-17T14:00:00+01:00", "label": "Lunch" }
+      ],
+      "priorities": ["health", "learning", "work", "leisure"]
+    }
+  }
+}

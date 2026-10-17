@@ -1,6 +1,6 @@
-# v0 prompt: Tasks on Trial
+# v0 prompt: Tasks on Trial (v3)
 
-Paste the block below into v0 as the first prompt. Iterate with short follow-ups; don't regenerate the whole thing.
+Paste the block below into v0 as the first prompt. Iterate with short follow-ups; don't regenerate everything.
 
 ---
 
@@ -8,100 +8,127 @@ Paste the block below into v0 as the first prompt. Iterate with short follow-ups
 Build a single-page web app called "Tasks on Trial" with Next.js (App Router), TypeScript, Tailwind and shadcn/ui.
 
 CONCEPT
-Most planners ask how to fit everything in. This one flips it: the calendar starts EMPTY and every task
-must earn its place in a British-style courtroom. Tasks pitch themselves, a judge rules, and the user
-can cross-examine any task. Unproven tasks stay out and the user keeps the free time. The hero metric
-is FREE TIME KEPT.
+Most planners ask how to fit everything in. This one flips it: the calendar starts EMPTY and every task stands
+trial in a British courtroom. Each task defends itself, a prosecutor objects, and a judge rules:
+APPROVED, REDUCED (smaller scope or a better replacement) or DISMISSED (zero minutes today).
+The user can cross-examine any task and accept a "plea deal". The hero metric is MINUTES RECOVERED.
 
-LAYOUT (one screen, desktop first, 3 columns, stacks on mobile)
-Header: logo "Tasks on Trial", tagline "The calendar starts empty. Your tasks must earn their place.",
-a large animated counter "Free time kept: 30 min" (with "15 min protected" underneath), and a small
-provenance badge: "Live · Nebius" / "Rule fallback" / "Replay".
+ONE PAGE, THREE STAGES (a top stepper: 1 Docket → 2 Courtroom → 3 Sentence; all on one route)
 
-Left column, "The Docket" (setup):
-- Day window: start and end time inputs. One "protected block" row (start/end, label "Breathing room").
-  "Add fixed block" button for rows like meetings.
-- Priorities: draggable-order chips (Health, Work, Money, Family, Learning). Up/down buttons are fine.
-- Task list (max 6 rows). Each row: title, duration (min), optional deadline (time), category select,
-  "evidence" short text field, optional "requires" multi-select of other tasks, and a 3-state toggle:
-  Auto / Include / Exclude.
-- Primary button: "Start the trial" (gavel icon). A "Load demo case" button fills the form with the demo data below.
+Header (always visible): logo "Tasks on Trial", tagline "The calendar starts empty. Your tasks must earn their place.",
+a huge animated counter "Minutes recovered: 120" with a smaller "Free capacity: 195 min" under it,
+and a source badge: "Live · Nebius" / "Fallback" / "Replay".
 
-Center column, "The Courtroom":
-- Task cards in a row: emoji, title, duration, category, a credibility meter (0–100%), and a speech bubble
-  with the task's latest line. A typewriter effect reveals text; a "Skip to verdict" button shows everything instantly.
-- Judge's bench below the cards: judge avatar (emoji with a wig 👨‍⚖️), the verdict text, and per-task status
-  badges: ADMITTED (green), NOT PROVEN (amber), DOES NOT FIT (grey), EXCLUDED (red outline).
-- "Cross-examine" panel, opened by clicking a card:
+Stage 1, "The Docket" (setup):
+- The day: start/end time, plus a "fixed blocks" list (e.g. Lunch 13:00–14:00) with add/remove rows.
+- Priorities: an ordered list of categories (Health, Learning, Work, Money, Family, Leisure) with up/down buttons.
+- Tasks (max 6), one card each with: title, duration (min), minimum (min), "Mandatory" switch,
+  "Allow reduction" switch, category select, optional deadline time, optional "depends on" multi-select,
+  and a "Facts" list (add short confirmed facts as chips, e.g. "Only five emails need a reply today").
+- Show the total requested minutes ("405 min requested") and an empty-calendar preview.
+- Buttons: "Load demo case" and the primary "Start the trial" (gavel icon).
+
+Stage 2, "The Courtroom":
+- One row per task: persona emoji + name, then a DEFENSE speech bubble (left) and a PROSECUTION bubble (right,
+  with a red "Objection!" tag that pops in once). Text appears with a short typewriter effect;
+  a "See the verdict" button skips all animation.
+- The judge's bench at the bottom (👨‍⚖️ in a wig) shows judge_summary.
+
+Stage 3, "The Sentence":
+- Three columns: APPROVED (green ✓), REDUCED (amber ✂️), DISMISSED (red ✗). Each card shows
+  the effective title, "original → approved" minutes (e.g. "60 → 15 min", with a strikethrough on the original),
+  the reason, a 1–3 step action plan, and a credibility meter (starts at 50%).
+  A card can also carry a "suggested need" chip (e.g. "Need: rest · suggested").
+  A PENDING task (approved but does not fit) uses a distinct icon (⏳) and the text "Approved · no slot today",
+  never just a different colour.
+- Timeline (right side): the day from start to end, with scheduled tasks (solid, by category),
+  fixed blocks (striped, labelled) and FREE gaps (dashed outline, labelled "Free"). The app does not fill the day.
+- A red conflicts banner if status is "conflict".
+- Each card has a "Cross-examine" button that opens a side sheet:
   5 question buttons: "What are you for?", "Why so long?", "Why today?", "Who needs you?",
-  "What's your smallest version?", plus a free-text question input. Max 3 questions per task (show a 3-dot counter).
-  The answer appears as the task's bubble with a rating badge: ✅ Supported / ⚠️ Evasive / ❌ Contradiction.
-  If the answer includes a proposal, show a "Plea deal" card: new title, new duration (e.g. 45 → 5 min),
-  steps, and two buttons: "Accept plea" and "Reject". Accepting re-runs the verdict.
-
-Right column, "Your Day":
-- A vertical timeline for the day window (e.g. 15:00–16:00, 1 px per ~6 s is fine), showing:
-  scheduled tasks (solid, colored by category, with time range and expandable steps), fixed blocks (striped),
-  the protected block (soft green, label "Breathing room"), and FREE time (empty, dashed outline, labeled "Free").
-- Below it, "Adjourned" (pending): each pending task with its reason ("Not proven", "Does not fit",
-  "Deadline", "Waiting on another task") and a "next step" line.
-- A conflicts banner (red) if the API returns conflicts.
+  "What's your smallest version?", plus a free-text question. Max 3 questions per task (3-dot counter).
+  The answer appears as the task's bubble with a rating badge: ✅ Supported / ⚠️ Evasive / ❌ Contradiction,
+  and the credibility meter moves by credibility_delta.
+  If there is a proposal, show a "Plea deal" card: new title, "45 → 15 min", the need, steps,
+  an optional "Add a new fact" input, and the buttons "Accept plea" / "Reject".
+  "Accept plea" calls appeal. Only 1 appeal per run, so disable it after use.
+  After the appeal, animate the change: the card moves column (e.g. DISMISSED → REDUCED), the counter
+  animates 120 → 105, and a small "Change" note shows the previous and new verdict.
 
 STATES
-idle, loading (lock all inputs, show a "The court is deliberating..." shimmer), success, error
-(friendly message + "Retry" + "Use replay" button). Ignore any response whose revision is older than the latest request.
+idle, loading (lock inputs, "The court is deliberating..." shimmer), success, error
+(a friendly message + "Retry" + "Use replay"). Ignore responses whose revision is older than the latest.
+Show "Replay" or "Fallback" clearly whenever the source is not "live".
 
 STYLE
-"Go wild" but readable: a modern British courtroom. Deep navy and mahogany backgrounds, brass/gold accents,
-cream paper cards, serif headings (e.g. Playfair Display) and a clean sans for body text. Subtle wood-grain
-or paper texture, a gavel animation when the verdict lands, and the free-time counter animating up when a task loses.
-Keep motion short and skippable.
+"Go wild" but readable: a modern British courtroom. Deep navy and mahogany, brass/gold accents,
+cream paper cards, serif headings (Playfair Display) with a clean sans body. A gavel animation when
+the verdict lands; keep all motion short and skippable. Responsive: columns stack on mobile.
 
 DATA AND API
-Put all state in React (no database, no auth). Create /lib/types.ts with these types and /lib/api.ts with
-runTrial(req: TrialRequest): Promise<TrialResponse> that POSTs to `${process.env.NEXT_PUBLIC_API_URL}/api/trial/run`.
-If NEXT_PUBLIC_USE_MOCK === "true", return the mock responses below after a 1.5 s delay instead.
+All state in React (no auth, no database). Create /lib/types.ts with the types below and /lib/api.ts with
+run(), interrogate() and appeal(), which POST JSON to `${process.env.NEXT_PUBLIC_API_URL}/api/trial/run`,
+`/api/trial/interrogate` and `/api/trial/appeal`. If NEXT_PUBLIC_USE_MOCK === "true", return the mock data
+from /lib/mocks.ts after a 1.5 s delay instead. Send the full case each time (the backend is stateless):
+appeal and interrogate also send previous_result and base_revision.
 
-type Action = "initial" | "interrogate" | "appeal";
-type QuestionType = "purpose" | "why_so_long" | "why_today" | "who_needs" | "minimal" | "free";
-interface Block { start: string; end: string; label?: string }
-interface Task { id: string; title: string; duration_min: number; deadline_at: string | null;
-  requires: string[]; category: "health"|"work"|"money"|"family"|"learning"|"other"; evidence: string }
-interface TrialRequest { request_id: string; revision: number; action: Action;
-  day: { date: string; timezone: string; start: string; end: string; fixed_blocks: Block[]; protected_blocks: Block[] };
-  tasks: Task[]; priorities: string[]; forced_ids: string[]; excluded_ids: string[];
-  history: Message[];
-  interrogation: { task_id: string; question_type: QuestionType; question_text: string | null } | null;
-  appeal: { task_id: string; proposed_title: string; proposed_duration_min: number; proposed_steps: string[]; user_confirmed: boolean } | null }
-interface Message { task_id: string; kind: "pitch"|"answer"|"appeal"|"verdict"; text: string }
-interface TrialResponse { request_id: string; revision: number; status: "ok";
-  provenance: "live"|"rule_fallback"|"replay"; messages: Message[];
-  interrogation_result: { task_id: string; question_type: QuestionType; answer: string;
-    rating: "supported"|"evasive"|"contradiction"; credibility: number;
-    proposal: { title: string; duration_min: number; steps: string[] } | null } | null;
-  decision: { admitted: string[]; pending: { task_id: string; reason_code: "not_proven"|"no_fit"|"deadline"|"requires_unmet"; next_step: string }[]; reason: string };
-  schedule: { task_id: string; start: string; end: string; steps: string[] }[];
-  free_min: number; protected_min: number;
-  conflicts: { code: string; task_ids: string[]; message: string }[];
-  meta?: { model_judge: string; model_tasks: string; llm_calls: number; latency_ms: number } }
+type Category = "health"|"learning"|"work"|"money"|"family"|"leisure"|"other";
+interface Task { id: string; title: string; duration_min: number; minimum_min: number; mandatory: boolean;
+  deadline: string | null; depends_on: string[]; category: Category; allow_reduction: boolean; facts: string[] }
+interface Constitution { timezone: string; start: string; end: string;
+  fixed_blocks: { start: string; end: string; label: string }[]; priorities: Category[] }
+interface Case { tasks: Task[]; constitution: Constitution }
+type Verdict = "APPROVED"|"REDUCED"|"DISMISSED";
+interface Decision { task_id: string; persona: { emoji: string; name: string }; defense: string; prosecution: string;
+  verdict: Verdict; original_min: number; approved_min: number; effective_title: string; reason: string;
+  action_plan: string[]; schedule_status: "SCHEDULED"|"PENDING"|"NOT_APPLICABLE";
+  pending_reason: "no_fit"|"deadline"|"depends_unmet"|null;
+  suggested_need: { need: string; status: "unconfirmed"|"confirmed" } | null }
+interface TrialResult { api_version: "1"; request_id: string; revision: number;
+  source: "live"|"fallback"|"replay"; status: "ok"|"conflict"; judge_summary: string;
+  decisions: Decision[]; schedule: { task_id: string; start: string; end: string }[];
+  metrics: { original_min: number; approved_min: number; minutes_recovered: number; pending_min: number; free_capacity_min: number };
+  conflicts: { code: string; task_ids: string[]; message: string }[]; appeals_used: number;
+  change: { task_id: string; previous_verdict: Verdict; new_verdict: Verdict; previous_minutes_recovered: number;
+    delta_minutes_recovered: number; new_fact: string | null } | null;
+  meta?: { model: string; llm_calls: number; latency_ms: number } }
+type QuestionType = "purpose"|"why_so_long"|"why_today"|"who_needs"|"minimal"|"free";
+interface Proposal { title: string; duration_min: number; need: string; steps: string[] }
+interface InterrogationResult { api_version: "1"; request_id: string; base_revision: number; source: string;
+  status: "ok"; task_id: string; question_type: QuestionType; answer: string;
+  rating: "supported"|"evasive"|"contradiction"; credibility_delta: number; proposal: Proposal | null }
 
-DEMO CASE (for "Load demo case" and mocks)
-Window 15:00–16:00, protected 15:45–16:00 "Breathing room". Priorities: Health, Work.
-Tasks: "Send the demo" (10 min, deadline 15:15, work, evidence "Submission form closes at 15:15. The build is ready."),
-"Go for a walk" (20 min, health, "I have been sitting all morning."),
-"Polish the slides" (45 min, work, "A basic deck already exists. The title slide has a typo.").
-Mock initial verdict: Send 15:00–15:10, Walk 15:10–15:30, Slides adjourned ("Does not fit"), free 30 min (15 protected).
-Mock "Why so long?" answer for Slides: "Why 45 minutes? ...Fine. The deck exists. Only the title slide has a typo.
-Five minutes, honestly." Rating Supported, credibility 70%, plea deal "Fix the title slide typo", 5 min.
-Mock after accepting the plea: Slides scheduled 15:30–15:35, free 25 min.
-Mock "Why today?" for Walk: "No comment." Rating Evasive.
+DEMO CASE (for "Load demo case" and the mocks). Day 09:00–18:00, fixed block Lunch 13:00–14:00,
+priorities Health > Learning > Work > Leisure.
+- "Study maths" 120 min, minimum 120, MANDATORY, learning, fact "Maths exam on Monday" → APPROVED 120, 09:00–11:00.
+- "Go to the gym" 60, minimum 30, health → APPROVED 60, 11:00–12:00.
+- "Answer emails" 60, minimum 15, work, fact "Only five emails need a reply today"
+  → REDUCED 15 "Reply to the five urgent emails", 12:00–12:15.
+- "Prepare presentation" 120, minimum 90, work, facts "Presenting on Monday", "Only the core slides are essential;
+  animations are optional" → REDUCED 90 "Build the essential slides", 14:00–15:30.
+- "Check Instagram" 45, minimum 15, leisure, fact "I usually scroll when I am tired" → DISMISSED 0,
+  suggested need "rest" (unconfirmed).
+Metrics: original 405, approved 285, recovered 120, free capacity 195.
+Personas: 📐 The Exam Hawk, 🏋️ Coach Thunder, 📧 The Inbox Martyr, 📊 The Perfectionist, 📱 Defender of Leisure.
+Email lines: defense "I need a full hour. Every single email deserves a reply!" / prosecution
+"Only five need a reply today. That is fifteen minutes, not sixty."
+Judge: "Two approved, two reduced, one dismissed. The court returns 120 minutes to the defendant."
+Mock cross-examination of Instagram, "What are you for?": "Honestly? You only scroll when you're tired. I'm not a hobby,
+I'm a break in disguise. Give me fifteen minutes, screens off." Rating Supported, +0.2. Plea: "Screen-free break",
+15 min, need rest, steps "Put the phone in another room", "Walk or stretch for 15 minutes".
+Mock after accepting the plea (new fact "I haven't taken a break in six hours"): Instagram → REDUCED 15
+"Screen-free break" 12:00–12:15, emails move to 12:15–12:30, approved 300, recovered 105, free capacity 180,
+judge "Appeal granted. Rest is a legitimate need. Fifteen minutes, screens off. The court still returns 105 minutes."
 
-Do NOT build: login, database, calendar sync, drag-and-drop on the timeline, multiple rounds, settings pages.
+Do NOT build: login, database, calendar sync, drag-and-drop on the timeline, settings pages, multiple rounds.
 ```
 
 ---
 
-## Follow-up prompts (use only if needed)
-- "Make the free-time counter much bigger and animate it when a task is adjourned."
-- "Add a gavel sound-free animation and a short screen shake when the verdict lands."
-- "Make the cross-examine panel a right-side sheet on mobile."
+## Follow-ups (only if needed)
+- "Make the minutes-recovered counter much bigger and animate it on every change."
+- "Make the cross-examine sheet slide in from the right on desktop and from the bottom on mobile."
+- "Add a subtle 'Objection!' stamp animation on the prosecution bubbles."
+
+## After v0
+Export the code into `frontend/` (download the ZIP or use the v0 CLI command it shows), then tell Claude. Claude will run `npm install` and replace the inline mocks with `fixtures/*.json`. Claude does not touch `.env` files: Carlos creates `.env.local` himself (`NEXT_PUBLIC_USE_MOCK=true`, `NEXT_PUBLIC_API_URL=http://localhost:8000`).

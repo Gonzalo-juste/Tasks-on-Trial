@@ -1,0 +1,18 @@
+{
+  "api_version": "1",
+  "request_id": "int-01",
+  "base_revision": 1,
+  "source": "replay",
+  "status": "ok",
+  "task_id": "instagram",
+  "question_type": "purpose",
+  "answer": "Honestly? You only scroll when you're tired. I'm not a hobby, I'm a break in disguise. Give me fifteen minutes, screens off.",
+  "rating": "supported",
+  "credibility_delta": 0.2,
+  "proposal": {
+    "title": "Screen-free break",
+    "duration_min": 15,
+    "need": "rest",
+    "steps": ["Put the phone in another room", "Walk or stretch for 15 minutes"]
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "api_version": "1",
+  "request_id": "appeal-01",
+  "revision": 2,
+  "source": "replay",
+  "status": "ok",
+  "judge_summary": "Appeal granted. Rest is a legitimate need. Fifteen minutes, screens off. The court still returns 105 minutes.",
+  "decisions": [
+    {
+      "task_id": "maths", "persona": { "emoji": "📐", "name": "The Exam Hawk" },
+      "defense": "Exam on Monday. Two hours today, or we panic on Sunday.",
+      "prosecution": "No objection. The exam is real and the time is proportionate.",
+      "verdict": "APPROVED", "original_min": 120, "approved_min": 120,
+      "effective_title": "Study maths", "reason": "Mandatory: maths exam on Monday.",
+      "action_plan": ["Redo last week's problem sheet", "Review the two weakest topics"],
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "gym", "persona": { "emoji": "🏋️", "name": "Coach Thunder" },
+      "defense": "Health is your number one priority. Sixty minutes. No excuses.",
+      "prosecution": "Is a full hour needed? The declared priority says yes. Objection withdrawn.",
+      "verdict": "APPROVED", "original_min": 60, "approved_min": 60,
+      "effective_title": "Go to the gym", "reason": "Matches the top declared priority: health.",
+      "action_plan": ["Pack the bag", "45 minutes of training, 15 of stretching"],
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "emails", "persona": { "emoji": "📧", "name": "The Inbox Martyr" },
+      "defense": "I need a full hour. Every single email deserves a reply!",
+      "prosecution": "Only five need a reply today. That is fifteen minutes, not sixty.",
+      "verdict": "REDUCED", "original_min": 60, "approved_min": 15,
+      "effective_title": "Reply to the five urgent emails", "reason": "User fact: only five emails need a reply today. Reduction authorised.",
+      "action_plan": ["Flag the five urgent emails", "Reply to each in under three minutes"],
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "presentation", "persona": { "emoji": "📊", "name": "The Perfectionist" },
+      "defense": "Two hours to make it flawless. Animations, transitions, the works.",
+      "prosecution": "Only the core slides are essential. Animations are optional. Ninety minutes covers it.",
+      "verdict": "REDUCED", "original_min": 120, "approved_min": 90,
+      "effective_title": "Build the essential slides", "reason": "User fact: animations are optional. Reduced to the confirmed minimum.",
+      "action_plan": ["Outline the core message", "Build the essential slides", "One quick run-through"],
+      "schedule_status": "SCHEDULED", "pending_reason": null, "suggested_need": null
+    },
+    {
+      "task_id": "instagram", "persona": { "emoji": "📱", "name": "Defender of Leisure" },
+      "defense": "Forty-five minutes of scrolling. You deserve it.",
+      "prosecution": "Scrolling is not proven. A screen-free break meets the real need in a third of the time.",
+      "verdict": "REDUCED", "original_min": 45, "approved_min": 15,
+      "effective_title": "Screen-free break", "reason": "Need for rest confirmed by the user. Replacement accepted.",
+      "action_plan": ["Put the phone in another room", "Walk or stretch for 15 minutes"],
+      "schedule_status": "SCHEDULED", "pending_reason": null,
+      "suggested_need": { "need": "rest", "status": "confirmed" }
+    }
+  ],
+  "schedule": [
+    { "task_id": "maths", "start": "2026-10-17T09:00:00+01:00", "end": "2026-10-17T11:00:00+01:00" },
+    { "task_id": "gym", "start": "2026-10-17T11:00:00+01:00", "end": "2026-10-17T12:00:00+01:00" },
+    { "task_id": "instagram", "start": "2026-10-17T12:00:00+01:00", "end": "2026-10-17T12:15:00+01:00" },
+    { "task_id": "emails", "start": "2026-10-17T12:15:00+01:00", "end": "2026-10-17T12:30:00+01:00" },
+    { "task_id": "presentation", "start": "2026-10-17T14:00:00+01:00", "end": "2026-10-17T15:30:00+01:00" }
+  ],
+  "metrics": {
+    "original_min": 405, "approved_min": 300, "minutes_recovered": 105,
+    "pending_min": 0, "free_capacity_min": 180
+  },
+  "conflicts": [],
+  "appeals_used": 1,
+  "change": {
+    "task_id": "instagram", "previous_verdict": "DISMISSED", "new_verdict": "REDUCED",
+    "previous_minutes_recovered": 120, "delta_minutes_recovered": -15,
+    "new_fact": "I haven't taken a break in six hours."
+  },
+  "meta": { "model": "example-model", "llm_calls": 0, "latency_ms": 0 }
+}
