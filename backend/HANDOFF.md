@@ -87,7 +87,7 @@ TrialResult = {
 - **No schedule change, no new revision.** Credibility starts at 0.5 in the frontend, which adds and clamps the delta. Max 3 per task (enforced by the frontend).
 
 ### `POST /api/trial/appeal` (tier 2)
-- **Request:** `{ "request_id", "api_version": "1", "case", "previous_result", "base_revision", "task_id", "new_fact": null | "...", "accepted_replacement": null | { "title", "duration_min", "need", "steps" } }`
+- **Request:** `{ "request_id", "api_version": "1", "case", "previous_result", "base_revision", "task_id", "new_fact": null | "...", "accepted_replacement": null | Proposal }`. `accepted_replacement` is the `proposal` object **exactly as `/interrogate` returned it**: `title`, `duration_min`, `need`, `saved_min`, `cut_scope`, `first_move`, `action_plan`, `done_when`.
 - **Response:** the full `TrialResult` with `revision = base_revision + 1`, `appeals_used: 1` and `change` filled (see `fixtures/appeal.response.json`).
 - **Behaviour:**
   - Re-judge **only** `task_id`, keep the other decisions and **rebuild** the whole schedule.

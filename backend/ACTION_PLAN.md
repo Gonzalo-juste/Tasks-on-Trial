@@ -70,3 +70,29 @@ If the target is dismissed, reject a plan-only revision because there is no
 approved time to allocate.
 
 No frontend files or fixtures were edited in response to this update.
+
+## Reconciliation after improvements 1–3
+
+Fetched origin and rechecked Carlos's published frontend contract. All four backend
+fixture copies match their frontend counterparts. The handoff snapshot now includes
+the clarification that appeal accepts the complete proposal returned by interrogation,
+including court orders and saved_min; the existing backend already supports this.
+No public field changes are requested.
+
+- Fixture /run, CORS, live /run, interrogation and accepted-replacement appeal are
+  implemented. The running server on port 8000 is in live mode; replay remains an
+  explicit configuration, not a label applied to generated output.
+- The complete local suite passes 102 tests, including exact replay responses,
+  initial and post-appeal demo metrics, court-order consistency, dismissal evidence,
+  and six-task workloads in English and Spanish. Six-task provider timing and model
+  quality are not established by these local tests.
+- Gonzalo reports that Carlos's first real frontend integration and the demo work.
+  This report does not establish that every UI interrogation/appeal path was tested.
+- Remaining integration check: exercise interrogation, accept its returned proposal
+  unchanged, and confirm the revised calendar and stale-request handling in the UI.
+- Improvement 4 (provider concurrency limits) awaits Gonzalo's separate approval.
+  No extra route, live test, or server restart is authorised by this reconciliation.
+- Keep /revise conditional and /init deferred. Backup video by 15:00, feature freeze
+  at 15:30, delivery at 16:00 remain Carlos's requested milestones.
+- Before cross-review, inspect local changes and sync main as jointly agreed.
+  Fetching this specification does not merge main or authorise a release merge.
