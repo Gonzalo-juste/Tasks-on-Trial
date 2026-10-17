@@ -1,30 +1,16 @@
+"""Tasks on Trial API. Run from repository root: uvicorn backend.main:app."""
+from pathlib import Path
+import json
 from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
-
-
-@app.get("/")
-def home():
-    return {"message": "Hackathon backend running!"}
-
+app = FastAPI(title="Tasks on Trial", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "mode": "replay"}
 
-
-class ChatRequest(BaseModel):
-    message: str
-
-
-@app.post("/chat")
-def chat(request: ChatRequest):
-
-    user_message = request.message
-
-    response = f"You said: {user_message}"
-
-    return {
-        "response": response
-    }
+@app.post("/api/trial/run")
+def run_trial(body: dict):
+    return json.loads((Path(__file__).parent / "fixtures/run.response.json").read_text())
