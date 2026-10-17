@@ -1,0 +1,10 @@
+BACKEND API NOTES
+
+This file contains the API agreement between
+the frontend and backend developers.
+
+Backend: Python + FastAPI
+Frontend: Next.js + React
+AI: Nebius
+
+API endpoints will be added once we choose the project.
