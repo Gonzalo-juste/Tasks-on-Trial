@@ -9,6 +9,8 @@ See BUDGET_UPDATE.md for accepted case.budget_min, buffered metrics, judge-first
 verdict precedence and deterministic cuts only when the model allocation is over budget.
 EVALUATION_ROUNDS.md now replaces category-only cuts with burden scoring and adds
 rules.rounds plus decision.exchanges while preserving round-one speech fields.
+Exchanges are optional: invalid/missing lists do not discard usable live verdicts.
+Use defense/prosecution when exchanges is absent.
 
 ## Intake: POST /api/trial/init
 

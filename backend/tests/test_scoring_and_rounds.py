@@ -190,12 +190,42 @@ def test_grand_all_exchanges_share_one_provider_request():
 
 
 @pytest.mark.parametrize('rounds',[1,2,3])
-def test_provider_schema_requires_exact_exchange_count(rounds):
+def test_provider_schema_keeps_exchanges_optional(rounds):
     schema=provider_run_schema(rounds).model_json_schema()
-    decision=schema['$defs'][f'ProviderDecision{rounds}Rounds']
-    assert 'exchanges' in decision['required']
-    assert decision['properties']['exchanges']['minItems']==2*rounds
-    assert decision['properties']['exchanges']['maxItems']==2*rounds
+    decision=schema['$defs']['Recommendation']
+    assert 'exchanges' not in decision['required']
+    assert decision['properties']['exchanges']['maxItems']==6
+
+
+@pytest.mark.parametrize('kind',['missing','null','shape','long_text','count','speaker','round','repeat','compatibility','history'])
+def test_bad_optional_exchanges_do_not_retry_or_lose_live_verdicts(kind):
+    case=base_case()
+    proposal=from_demo(RunRequest(request_id='optional-exchanges',confirmed=True,case=case))
+    body=proposal.model_dump(mode='json')
+    row=body['decisions'][2]
+    if kind=='missing':row.pop('exchanges')
+    elif kind=='null':row['exchanges']=None
+    elif kind=='shape':row['exchanges']={'unexpected':'shape'}
+    elif kind=='long_text':row['exchanges'][0]['text']='x'*201
+    elif kind=='count':row['exchanges'].pop()
+    elif kind=='speaker':row['exchanges'][1]['speaker']='defense'
+    elif kind=='round':row['exchanges'][1]['round']=2
+    elif kind=='repeat':row['exchanges'][1]['text']=row['exchanges'][0]['text']
+    elif kind=='compatibility':row['exchanges'][0]['text']='A different optional speech.'
+    elif kind=='history':
+        row['defense']=row['exchanges'][0]['text']='I have ignored these emails before.'
+    calls=[]
+    async def handler(request):
+        calls.append(1)
+        return httpx.Response(200,json={'choices':[{'message':{'content':json.dumps(body)}}]})
+    async def check():
+        return await NebiusClient(Settings(api_key='mock',model='mock'),httpx.MockTransport(handler)).run(case)
+    returned,meta=asyncio.run(check())
+    result=build_result(case,returned,'optional-exchanges','live',meta)
+    assert result.source=='live' and result.metrics.minutes_recovered==120
+    assert result.decisions[2].verdict=='REDUCED' and result.decisions[2].approved_min==15
+    assert not result.decisions[2].exchanges
+    assert meta.llm_calls==1 and len(calls)==1
 
 
 def test_invented_personal_history_is_rejected_but_quoted_evidence_is_allowed():

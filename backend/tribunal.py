@@ -187,7 +187,7 @@ def build_result(case: Case, proposal: RunProposal | None, request_id: str, sour
         if proposal is not None:
             fit_recommendations_to_budget(case, decisions, categories, by_id)
     if source != 'replay' or any(d.exchanges for d in decisions):
-        populate_exchanges(case, decisions)
+        populate_exchanges(case, decisions, include_fallback=source == 'fallback')
     schedule, metrics, conflicts = plan(case, decisions, categories)
     tasks = {t.id: t for t in case.tasks}
     mandatory_load = sum(d.approved_min + tasks[d.task_id].buffer_min

@@ -9,7 +9,8 @@ prosecution (fair, <=240 chars), recommendation APPROVED/REDUCED/DISMISSED, appr
 effective_title, fact_cited (exact text from that task's facts, or null), cut_scope,
 first_move, action_plan [{step,minutes}], done_when, release, suggested_need,
 exchanges, score_adjustment (-1/0/1) and score_reason (short reason, or null for 0).
-The payload specifies rounds (1-3). For EACH task generate EXACTLY 2*rounds exchanges:
+The payload specifies rounds (1-3). Exchanges are OPTIONAL enrichment. If supplied,
+for EACH task generate EXACTLY 2*rounds exchanges:
 [{round:1,speaker:"defense",text:"..."},{round:1,speaker:"prosecution",text:"..."},...].
 Always alternate defense then prosecution; prosecution has the LAST word.
 Every text is <=200 characters; aim for 80-130 to keep six-task Grand trials fast.

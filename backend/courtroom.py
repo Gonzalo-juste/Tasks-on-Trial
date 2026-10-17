@@ -1,5 +1,6 @@
 """Round negotiation, structural validation and explicitly non-live fallback speech."""
 import re
+import logging
 from .schemas import Exchange
 from .presentation import natural_language
 
@@ -49,14 +50,22 @@ def fallback_exchanges(task, decision, rounds):
             for speaker,text in zip(['defense','prosecution'],pair)]
 
 
-def populate_exchanges(case, decisions):
+def populate_exchanges(case, decisions, include_fallback=False):
     tasks = {task.id:task for task in case.tasks}
     rounds = round_count(case)
     for decision in decisions:
-        if not decision.exchanges:
+        if not decision.exchanges and include_fallback:
             decision.exchanges = fallback_exchanges(tasks[decision.task_id],decision,rounds)
-        else:
+        elif decision.exchanges:
             decision.exchanges = [e.model_copy(update={'text':natural_language(e.text)[:200]},deep=True)
                                   for e in decision.exchanges]
+        if not decision.exchanges:
+            continue
+        try:
+            validate_exchanges(decision.exchanges,rounds,
+                natural_language(decision.defense)[:200],natural_language(decision.prosecution)[:200])
+        except ValueError:
+            logging.getLogger('uvicorn.error.tribunal').warning('result_exchanges_dropped reason=invalid_optional_exchanges')
+            decision.exchanges = []
+            continue
         decision.defense,decision.prosecution = decision.exchanges[0].text,decision.exchanges[1].text
-        validate_exchanges(decision.exchanges,rounds,decision.defense,decision.prosecution)

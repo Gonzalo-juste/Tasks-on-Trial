@@ -1,5 +1,12 @@
 # Burden-of-proof evaluation and courtroom rounds
 
+Demo reliability correction: exchanges are now OPTIONAL enrichment. Missing,
+malformed or invalid exchanges are discarded without rejecting otherwise valid
+live recommendations or triggering another provider call. The original defense
+and prosecution remain available. This supersedes the required-exchanges schema
+described in the initial implementation below. Financial/calendar invariants,
+mandatory protection, task IDs and verdict validation remain strict.
+
 This update supersedes category-only automatic budget cuts. Existing response
 fields remain; generated decisions add exchanges. No frontend files are edited.
 
@@ -71,7 +78,7 @@ Grand mode sends drama:1 to the model without mutating the confirmed case or its
 session fingerprint. Frontend pacing controls screen time; the backend adds no
 per-argument delay or duration fields.
 
-Each generated decision returns exactly 2*rounds exchanges:
+When present and valid, a generated decision returns exactly 2*rounds exchanges:
 
 ```json
 {
@@ -86,21 +93,23 @@ Each generated decision returns exactly 2*rounds exchanges:
 
 Subsequent rounds alternate defense/prosecution in the same way, ending with the
 prosecution. Each text is at most 200 characters. defense/prosecution equal round
-one exactly. The provider schema makes the list mandatory and fixes its length
-to 2, 4 or 6; all tasks and exchanges share one /run generation, with only the
-existing bounded retry for invalid output.
+one exactly. The provider schema leaves the list optional. All tasks and exchanges
+share one /run generation, with the existing bounded retry retained for invalid
+core recommendations. An invalid optional list is dropped instead of retried.
 
-Checks reject wrong counts, ordering, round numbers, exact repeated arguments and
-round-one mismatches. The prompt asks for new, grounded arguments and direct
+Checks discard lists with wrong counts, ordering, round numbers, exact repeated
+arguments or round-one mismatches. The prompt asks for new, grounded arguments and direct
 rebuttals. A targeted check rejects obvious invented personal-history statements
 unless quoting a supplied fact. These checks do not prove semantic novelty or
 that a verdict follows the logically stronger argument; those remain model-quality
 limitations. Speculative benefits must be labelled as estimates, never personal facts.
 
-Fallback returns the requested number of clearly non-live speeches based on known
+Provider-failure fallback returns the requested number of clearly non-live speeches based on known
 inputs and unavailable assessment. It does not fabricate an independent debate.
 Original recorded replay fixtures remain unchanged and may omit exchanges; clients
 can continue using defense/prosecution for those legacy recordings.
+Live decisions can also omit exchanges: use their existing defense/prosecution.
+No synthetic multi-round debate is substituted into a live result.
 
 Appeal/pardon result rebuilding preserves exchange shape and round-one compatibility.
 Changing the confirmed rules or case after a trial still requires a fresh /run.

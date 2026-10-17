@@ -3,7 +3,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, StrictInt, field_validator, create_model
+from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, StrictInt, field_validator
 from .errors import ApiError
 
 Category = Literal['health', 'learning', 'work', 'money', 'family', 'leisure', 'other']
@@ -229,6 +229,17 @@ class Recommendation(Model):
     release: Release | None = None
     suggested_need: Need | None = None
 
+    @field_validator('exchanges', mode='before')
+    @classmethod
+    def optional_speeches(cls, value):
+        # Cosmetic enrichment must never invalidate usable task recommendations.
+        if not isinstance(value, list) or len(value) > 6:
+            return []
+        try:
+            return [Exchange.model_validate(item) for item in value]
+        except (ValueError, TypeError):
+            return []
+
 class RunProposal(Model):
     decisions: Annotated[list[Recommendation], Field(min_length=1, max_length=6)]
     judge_summary: Annotated[str, Field(max_length=200)] = ''
@@ -236,12 +247,9 @@ class RunProposal(Model):
 
 @lru_cache(maxsize=3)
 def provider_run_schema(rounds: int):
-    """Make the requested speeches mandatory in the actual structured-output schema."""
+    """Rounds are optional enrichment; task verdicts retain their strict schema."""
     if rounds not in (1, 2, 3): raise ValueError('Unsupported round count.')
-    decision = create_model(f'ProviderDecision{rounds}Rounds', __base__=Recommendation,
-        exchanges=(list[Exchange], Field(..., min_length=2*rounds, max_length=2*rounds)))
-    return create_model(f'ProviderRun{rounds}Rounds', __base__=RunProposal,
-        decisions=(list[decision], Field(..., min_length=1, max_length=6)))
+    return RunProposal
 
 class InterrogationProposal(Model):
     answer: Annotated[str, Field(max_length=240)]

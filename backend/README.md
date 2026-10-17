@@ -10,6 +10,8 @@ v4 demo is tested locally; a new shared replay fixture set is still needed from 
 See [EVALUATION_ROUNDS.md](EVALUATION_ROUNDS.md) for the latest burden-score budget
 policy and 1–3 rounds of exchanges generated together in one /run call. It
 supersedes the category-only cut order described in earlier checkpoints.
+Courtroom exchanges are optional enrichment; invalid lists are dropped while
+preserving valid live verdicts. Clients can always use defense/prosecution.
 
 ## Start locally
 

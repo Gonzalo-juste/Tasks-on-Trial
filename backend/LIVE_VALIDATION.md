@@ -1,5 +1,31 @@
 # Live generation validation
 
+## Urgent Quick-trial reliability fix
+
+Server logs after the rounds update identify round_one_mismatch as the repeated
+failure: valid provider responses were retried and discarded because optional
+exchanges did not exactly match legacy defense/prosecution fields. Observed failed
+runs took 17.8–19.3 seconds, two calls, and returned conservative fallback. This was
+a validation regression, not evidence of a new model failing. Lightning was already
+the previously working model and remains selected.
+
+Exchanges are now optional. Malformed, incomplete, repeated, out-of-order, ungrounded
+or incompatible optional lists are discarded while core verdicts remain strict.
+No fabricated additional debate is inserted into live results. Local regressions
+verify each failure class retains the live verdicts with exactly one provider call.
+
+A fresh six-task Quick check used 240 minutes, the 45-minute study witness answer,
+and mandatory study with shortening explicitly permitted. /run returned live in
+5,422 ms, one call: original 365, approved 215, recovered 150, pending 0, free 25.
+Run, emails and TikTok were dismissed; study retained 45 minutes. Live interrogation
+proposed the unconfirmed 15-minute screen-free break. Accepted appeal applied it at
+revision 2, approved 230, recovered 135, pending 0, free 10. The appeal assessment
+failed provider validation and was honestly labelled fallback; its explicitly
+accepted replacement and updated calendar were still applied and validated.
+
+These are observed results, not guaranteed future verdicts. Older required-exchange
+schema descriptions below document the earlier implementation, now superseded.
+
 17 October 2026. Gonzalo explicitly authorised sending Carlos's prepared five-task
 fixture, its durations and its confirmed facts to Nebius using his configured account.
 No credentials or full task contents are stored in this report.

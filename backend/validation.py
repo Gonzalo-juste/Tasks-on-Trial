@@ -13,8 +13,6 @@ def verify_result(case: Case, result: TrialResult) -> None:
         task = tasks[d.task_id]
         if d.exchanges:
             validate_exchanges(d.exchanges,round_count(case),d.defense,d.prosecution)
-        elif result.source != 'replay':
-            raise ValueError('Generated decisions need courtroom exchanges.')
         saved = task.duration_min - d.approved_min + (task.buffer_min if d.verdict == 'DISMISSED' else 0)
         if d.original_min != task.duration_min or d.saved_min != saved:
             raise ValueError('Per-task minutes are inconsistent.')

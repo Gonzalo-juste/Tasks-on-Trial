@@ -107,9 +107,14 @@ class NebiusClient:
             if len(ids) != len(set(ids)) or set(ids) != expected:
                 raise ValueError('Unexpected task IDs')
             for decision in value.decisions:
-                validate_exchanges(decision.exchanges,round_count(case),decision.defense,decision.prosecution)
                 task = next(t for t in case.tasks if t.id == decision.task_id)
-                validate_personal_history(decision.exchanges,task)
+                if decision.exchanges:
+                    try:
+                        validate_exchanges(decision.exchanges,round_count(case),decision.defense,decision.prosecution)
+                        validate_personal_history(decision.exchanges,task)
+                    except ValueError:
+                        logger.warning('provider_exchanges_dropped reason=invalid_optional_exchanges')
+                        decision.exchanges = []
                 if decision.score_adjustment and not decision.score_reason:
                     raise ValueError('Score adjustment requires a short reason.')
         case_payload = case.model_dump(mode='json')
