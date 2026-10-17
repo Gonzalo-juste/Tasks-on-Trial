@@ -84,9 +84,9 @@ const TEMPLATES: Record<Archetype, Template> = {
 // Which uncertainty changes a ruling most, first.
 const PRIORITY: Archetype[] = ["book", "slides", "envelope", "dumbbell", "broom", "cart", "heart", "phone", "briefcase", "runner", "note"]
 
-/** Mandatory tasks, tasks with an explicit travel buffer and tasks already answered need no question. */
+/** Mandatory tasks, tasks with a typed deadline (already evidence), explicit travel buffers and answered tasks need no question. */
 function isResolved(task: Task, archetype: Archetype) {
-  if (task.mandatory) return true
+  if (task.mandatory || task.deadline) return true
   if (archetype === "dumbbell" && /travel|setup/i.test(task.facts.join(" "))) return true
   const askedFacts = TEMPLATES[archetype](task).options.map((option) => option.fact)
   return task.facts.some((fact) => askedFacts.includes(fact))

@@ -11,7 +11,7 @@ import { applyWitnessAnswer, pickWitnessQuestion } from "@/lib/witness"
 import type { Archetype, Case, Category, Task } from "@/lib/types"
 
 const chaoticDay = "Finish pitch slides 90 min due 6pm\nStudy for exam 90 min\nGym 60 min + 20 min travel\nGo for a run 30 min\nReply to emails 30 min\nScroll TikTok 45 min"
-const prioritiesForDemo: Category[] = ["work", "learning", "health", "leisure", "money", "family", "other"]
+const prioritiesForDemo: Category[] = ["work", "health", "learning", "leisure", "money", "family", "other"]
 const priorityMarks: Record<Category, string> = { health: "✳", learning: "⌘", work: "▤", money: "£", family: "♡", leisure: "◌", other: "·" }
 const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }[] = [
   { mode: "quick", label: "Quick trial", hint: "1 round · defence + objection" },
