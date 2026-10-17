@@ -2,31 +2,39 @@
 
 Equipo: Carlos (frontend) · Gonzalo (backend)
 
-| Ronda | Hora | Qué |
+Horario definitivo: el evento empezó tarde y la entrega es a las 16:00. Las rondas se han quitado.
+
+| Fase | Hora | Qué |
 |---|---|---|
-| 0 | 09:00–09:30 | Escuchar el reto y copiarlo literal |
-| 1 | 09:30–09:40 | Brainstorm en silencio (3 ideas cada uno) |
-| 2 | 09:40–10:00 | Crazy 8s + top 3 sellado |
-| 3 | 10:00–10:15 | Comparar con las ideas de otros chats de IA |
-| 4 | 10:15–10:30 | Decidir + brief |
-| Build | 10:30–13:30 | Checkpoint 12:30, comida 20 min |
-| Review | 13:30–14:25 | `git pull origin main` antes |
-| Implementar + integrar | 14:25–15:15 | `git pull origin main` antes |
-| Feature freeze | 15:15 | Solo arreglos y demo |
+| Idea + build | ahora–13:45 | Comida y networking a las 12:30 (pausa corta, checkpoint) |
+| Review | 13:45–14:50 | `git pull origin main` antes |
+| Implementar + integrar | 14:50–15:45 | `git pull origin main` antes |
+| Feature freeze | 15:45 | Solo arreglos y ensayo de la demo |
+| Entrega | 16:00 | Presentaciones de 16:00 a 17:00 |
 
 ---
 
 ## Ronda 0: El reto (literal)
 
-**Reto:**
+**Reto: "Flip the script"** (según lo contó Carlos; falta pegar el texto oficial literal)
+
+> Take something we all assume has to work a certain way and turn it on its head. Think about the systems, processes and ideas we take for granted: what if they worked in reverse?
+>
+> The challenge is to pick something familiar, challenge the assumption behind it and build a completely different way of doing things. Don't just make it better: flip the whole idea.
+
+Clave: **no vale mejorar, hay que invertir la suposición.**
 
 **Premios:**
 
-**Criterios de evaluación (y su peso):**
+**Criterios de evaluación:** se premia la **creatividad**. Los sponsors han dicho "go wild".
 
 **Reglas:**
 
-**Entrega (formato y hora límite):**
+**Entrega:** a las **16:00**. De 16:00 a 17:00, presentaciones.
+
+**Agenda:** a las 12:30, networking y comida (pausa corta). Después se sigue hasta las 16:00.
+
+**Modelos de Nebius:** todos disponibles.
 
 ### Preguntas a los organizadores
 
