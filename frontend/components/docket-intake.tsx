@@ -21,6 +21,12 @@ const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }
 ]
 // The calendar window is wider than the granted budget, so long blocks can still find a slot; budget_min caps the total.
 const WINDOW_SLACK_MIN = 60
+// Where the budget is concentrated: the window starts at your sharpest time and the engine places the weightiest tasks first.
+const FOCUS_WINDOWS = [
+  { id: "morning", label: "🌅 Morning", hint: "from 08:00", start: "08:00" },
+  { id: "afternoon", label: "☀️ Afternoon", hint: "from 13:30", start: "13:30" },
+  { id: "night", label: "🌙 Night", hint: "from 19:00", start: "19:00" },
+]
 const quickAddIcons: Record<string, string> = {
   Study: "📚", Gym: "🏋️", Emails: "✉️", Slides: "📊", Meeting: "💼", Report: "📝", Groceries: "🛒",
   Laundry: "🧺", Cook: "🍳", "Call family": "❤️", Run: "🏃", Read: "📖", Errands: "🧾", Social: "📱",
@@ -118,7 +124,15 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
 
   const syncWindow = (nextStart = startAt, nextBudget = grantedMinutes, fixed = caseData.constitution.fixed_blocks) => {
     const fixedTotal = fixed.reduce((total, block) => total + Math.max(0, minutes(block.end) - minutes(block.start)), 0)
-    onCase({ ...caseData, budget_min: nextBudget, constitution: { ...caseData.constitution, start: nextStart, end: formatTime(minutes(nextStart) + nextBudget + fixedTotal + WINDOW_SLACK_MIN), fixed_blocks: fixed } })
+    onCase({ ...caseData, budget_min: nextBudget, constitution: { ...caseData.constitution, start: nextStart, end: formatTime(Math.min(minutes(nextStart) + nextBudget + fixedTotal + WINDOW_SLACK_MIN, 23 * 60 + 59)), fixed_blocks: fixed } })
+  }
+  /** Move the whole budget to the chosen part of the day; commitments outside the new window are dropped. */
+  const concentrateAt = (start: string) => {
+    const begin = minutes(start)
+    const end = begin + grantedMinutes + WINDOW_SLACK_MIN + 120
+    const fixed = caseData.constitution.fixed_blocks.filter((block) => minutes(block.start) >= begin && minutes(block.end) <= Math.min(end, 24 * 60 - 1))
+    setStartAt(start)
+    syncWindow(start, grantedMinutes, fixed)
   }
   const setAvailableMinutes = (next: number) => {
     const safe = Math.min(960, Math.max(0, next))
@@ -198,7 +212,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     <div className="docket-stage-grid"><div className="docket-stage-main"><section className="budget-first-panel docket-paper" aria-labelledby="available-time-title">
       <div className="budget-first-top"><div><span className="new-eyebrow">FIRST, SET THE LIMIT</span><h2 id="available-time-title">How much time are you willing to give today?</h2></div><label className="available-time-label">Available time<span>{Math.floor(grantedMinutes / 60)}h{grantedMinutes % 60 ? ` ${grantedMinutes % 60}m` : ""}</span></label></div>
       <div className="budget-controls-row"><div className="budget-presets" role="group" aria-label="Available time presets">{[120, 240, 360, 480].map((value) => <button key={value} className={`budget-preset ${grantedMinutes === value ? "selected" : ""}`} aria-pressed={grantedMinutes === value} onClick={() => setAvailableMinutes(value)}>{value / 60}h{value === 240 && <small>Suggested</small>}</button>)}</div><div className="budget-stepper"><button aria-label="Reduce available time by 30 minutes" onClick={() => setAvailableMinutes(grantedMinutes - 30)}>−</button><span>30 min steps</span><button aria-label="Add 30 minutes of available time" onClick={() => setAvailableMinutes(grantedMinutes + 30)}>+</button></div></div>
-      <p className="budget-caption">Excludes meetings and other fixed commitments.</p>
+      <p className="budget-caption">Excludes meetings and other fixed commitments.</p><div className="focus-window" role="group" aria-label="When are you sharpest?"><span className="new-eyebrow">WHEN ARE YOU SHARPEST?</span>{FOCUS_WINDOWS.map((option) => <button key={option.id} className={startAt === option.start ? "active" : ""} aria-pressed={startAt === option.start} onClick={() => concentrateAt(option.start)}><strong>{option.label}</strong><small>{option.hint}</small></button>)}<p>The court spends your budget there, weightiest matters first.</p></div>
       <details className="optional-budget-detail"><summary>+ Add commitment</summary><div className="commitment-list">{caseData.constitution.fixed_blocks.map((block, index) => <div className="commitment-row" key={`${block.label}-${index}`}><label>Commitment<input aria-label="Commitment" value={block.label} onChange={(event) => changeCommitment(index, { label: event.target.value })} /></label><label>Starts<input aria-label="Commitment start" type="time" value={block.start} onChange={(event) => changeCommitment(index, { start: event.target.value })} /></label><label>Ends<input aria-label="Commitment end" type="time" value={block.end} onChange={(event) => changeCommitment(index, { end: event.target.value })} /></label><button className="remove-commitment" aria-label={`Remove ${block.label}`} onClick={() => syncWindow(startAt, grantedMinutes, caseData.constitution.fixed_blocks.filter((_, blockIndex) => blockIndex !== index))}>Remove</button></div>)}<button className="quiet-add-commitment" onClick={addCommitment}><Plus /> Add a fixed block</button></div></details>
       <details className="optional-budget-detail"><summary>Schedule from: now</summary><div className="schedule-start-row"><label>Start time<input type="time" aria-label="Schedule from" value={startAt} onChange={(event) => { setStartAt(event.target.value); syncWindow(event.target.value, grantedMinutes) }} /></label><button onClick={() => { const now = new Date(); const start = formatTime(now.getHours() * 60 + now.getMinutes()); setStartAt(start); syncWindow(start, grantedMinutes) }}>Use now</button><span>The court will use this as the beginning of your available window.</span></div></details>
 
