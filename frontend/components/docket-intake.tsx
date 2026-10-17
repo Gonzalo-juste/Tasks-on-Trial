@@ -10,7 +10,7 @@ import { quickCapture } from "@/lib/estimates"
 import { applyWitnessAnswer, pickWitnessQuestion } from "@/lib/witness"
 import type { Archetype, Case, Category, Task } from "@/lib/types"
 
-const chaoticDay = "Finish pitch slides 90 min due 6pm\nStudy for exam 90 min\nGym 60 min + 20 min travel\nGo for a run 30 min\nReply to emails 30 min\nScroll TikTok 45 min"
+const chaoticDay = "Finish pitch slides 90 min due 6pm\nStudy for exam 90 min\nGym 60 min + 20 min travel\nGo for a run 60 min\nReply to emails 30 min\nScroll TikTok 45 min"
 const prioritiesForDemo: Category[] = ["work", "health", "learning", "leisure", "money", "family", "other"]
 const priorityMarks: Record<Category, string> = { health: "✳", learning: "⌘", work: "▤", money: "£", family: "♡", leisure: "◌", other: "·" }
 const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }[] = [
@@ -19,6 +19,8 @@ const trialFormats: { mode: Case["rules"]["mode"]; label: string; hint: string }
   { mode: "grand", label: "Grand trial", hint: "3 rounds · full drama" },
   { mode: "immediate", label: "Immediate sentence", hint: "Skip to the verdict" },
 ]
+// The calendar window is wider than the granted budget, so long blocks can still find a slot; budget_min caps the total.
+const WINDOW_SLACK_MIN = 60
 const quickAddIcons: Record<string, string> = {
   Study: "📚", Gym: "🏋️", Emails: "✉️", Slides: "📊", Meeting: "💼", Report: "📝", Groceries: "🛒",
   Laundry: "🧺", Cook: "🍳", "Call family": "❤️", Run: "🏃", Read: "📖", Errands: "🧾", Social: "📱",
@@ -109,14 +111,14 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     const isDefaultWindow = caseData.constitution.start === "09:00" && caseData.constitution.end === "13:00" && docket.length === 0
     const now = new Date()
     const start = isDefaultWindow ? formatTime(now.getHours() * 60 + now.getMinutes()) : caseData.constitution.start
-    const end = formatTime(minutes(start) + grantedMinutes + fixedMinutes)
+    const end = formatTime(minutes(start) + grantedMinutes + fixedMinutes + WINDOW_SLACK_MIN)
     setStartAt(start)
-    onCase({ ...caseData, constitution: { ...caseData.constitution, start, end } })
+    onCase({ ...caseData, budget_min: grantedMinutes, constitution: { ...caseData.constitution, start, end } })
   }, [caseData, fixedMinutes, grantedMinutes, onCase])
 
   const syncWindow = (nextStart = startAt, nextBudget = grantedMinutes, fixed = caseData.constitution.fixed_blocks) => {
     const fixedTotal = fixed.reduce((total, block) => total + Math.max(0, minutes(block.end) - minutes(block.start)), 0)
-    onCase({ ...caseData, constitution: { ...caseData.constitution, start: nextStart, end: formatTime(minutes(nextStart) + nextBudget + fixedTotal), fixed_blocks: fixed } })
+    onCase({ ...caseData, budget_min: nextBudget, constitution: { ...caseData.constitution, start: nextStart, end: formatTime(minutes(nextStart) + nextBudget + fixedTotal + WINDOW_SLACK_MIN), fixed_blocks: fixed } })
   }
   const setAvailableMinutes = (next: number) => {
     const safe = Math.min(960, Math.max(0, next))
@@ -128,7 +130,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     onRawText(text)
     setManualDurations([])
     setVisibleStart(0)
-    onCase({ ...caseData, tasks: result.tasks, constitution: { ...caseData.constitution, start: startAt, end: formatTime(minutes(startAt) + grantedMinutes + fixedMinutes) } })
+    onCase({ ...caseData, budget_min: grantedMinutes, tasks: result.tasks, constitution: { ...caseData.constitution, start: startAt, end: formatTime(minutes(startAt) + grantedMinutes + fixedMinutes + WINDOW_SLACK_MIN) } })
   }
   const appendQuickAdd = (item: string) => onTextChange(`${rawText.trimEnd()}${rawText.trim() ? "\n" : ""}${item}`)
   const setPriorityOrder = (next: Category[]) => onCase({ ...caseData, constitution: { ...caseData.constitution, priorities: next } })
@@ -149,7 +151,8 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     const start = "12:00"
     const priorities = [...prioritiesForDemo]
     onRawText(chaoticDay)
-    setGrantedMinutes(240)
+    // 230 min: the minimums of all six tasks (235) don't fit, so the gym is dismissed; the pact (one 60-min session) does.
+    setGrantedMinutes(230)
     setStartAt(start)
     setManualDurations([])
     setVisibleStart(0)
@@ -157,10 +160,11 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
     setSkippedQuestion(null)
     onCase({
       ...caseData,
+      budget_min: 230,
       // Slides can be trimmed to a 70-minute core: with slides and study both locked at 90 nothing else would fit.
       tasks: demo.tasks.map((task) => task.id === "finish-pitch" ? { ...task, minimum_min: 70, allow_reduction: true } : task),
       // Lunch is a fixed commitment: the 4h budget stays discretionary, so the window grows by 30 minutes.
-      constitution: { ...caseData.constitution, start, end: "16:30", fixed_blocks: [{ start: "13:00", end: "13:30", label: "Lunch" }], priorities },
+      constitution: { ...caseData.constitution, start, end: "17:20", fixed_blocks: [{ start: "13:00", end: "13:30", label: "Lunch" }], priorities },
     })
   }
   const applyAnswer = (option: NonNullable<typeof question>["options"][number]) => {

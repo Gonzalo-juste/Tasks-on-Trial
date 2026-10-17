@@ -202,3 +202,10 @@
 .deliberation-overlay .court-judge{width:150px}
 .deliberation-overlay strong{font:500 30px var(--font-court-serif),Georgia,serif}
 .deliberation-overlay span{color:#e0bd6f;font-size:14px;font-weight:700;letter-spacing:.06em}
+.pact-card{margin:12px 0;padding:14px 16px;color:#1f2f38;border:2px solid #3f9bd1;border-radius:10px;background:linear-gradient(135deg,#eef7fd,#fffaf0);box-shadow:0 0 0 4px #3f9bd122}
+.pact-card span{display:block;color:#2a6f99;font-size:10px;font-weight:900;letter-spacing:.14em}
+.pact-card strong{display:block;margin:4px 0;font:600 20px var(--font-court-serif),Georgia,serif}
+.pact-card p{margin:0 0 6px;font-size:13px;font-style:italic;line-height:1.45}
+.pact-card ol{margin:0 0 6px;padding-left:18px;font-size:12px}
+.pact-card small{display:block;margin-bottom:8px;color:#5b6a73;font-size:11px}
+.pact-card button{padding:8px 14px;color:#fffaf0;border:0;border-radius:6px;background:#2a6f99;font-weight:800;cursor:pointer}
