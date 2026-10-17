@@ -68,27 +68,16 @@ function grantedBudget(caseData: Case) {
   return Math.max(0, clockMinutes(end) - clockMinutes(start) - fixed)
 }
 
-// The backend rejects budget_min until it supports it; the Docket's window already encodes the budget.
-const SEND_BUDGET = process.env.NEXT_PUBLIC_SEND_BUDGET === "true"
-const SEND_ROUNDS = process.env.NEXT_PUBLIC_SEND_ROUNDS === "true"
+const ROUNDS_FOR_MODE: Record<Case["rules"]["mode"], number> = { immediate: 1, quick: 1, standard: 2, grand: 3 }
 
+/** Deterministic: the same case always serialises the same way, so the backend's session checks keep matching. */
 export function caseToApi(caseData: Case): Case {
   const { budget_min: _omit, ...rest } = caseData
-  // The backend knows "quick" | "immediate"; standard and grand only change the frontend's pacing,
-  // and a grand trial asks for more drama.
-  const { rounds: _rounds, ...baseRules } = rest.rules ?? ({} as Case["rules"])
-  const rounds = rest.rules?.mode === "grand" ? 3 : rest.rules?.mode === "standard" ? 2 : 1
-  const rules = rest.rules && {
-    ...baseRules,
-    mode: rest.rules.mode === "immediate" ? "immediate" : "quick",
-    drama: rest.rules.mode === "grand" ? Math.max(rest.rules.drama, 0.85) : rest.rules.drama,
-    // Sent only once the backend accepts it (NEXT_PUBLIC_SEND_ROUNDS=true).
-    ...(SEND_ROUNDS ? { rounds } : {}),
-  }
+  const rules = rest.rules && { ...rest.rules, rounds: rest.rules.rounds ?? ROUNDS_FOR_MODE[rest.rules.mode] ?? 1 }
   return {
     ...rest,
-    ...(rules ? { rules: rules as Case["rules"] } : {}),
-    ...(SEND_BUDGET ? { budget_min: grantedBudget(caseData) } : {}),
+    ...(rules ? { rules } : {}),
+    budget_min: grantedBudget(caseData),
     tasks: caseData.tasks.map((task) => ({ ...task, deadline: task.deadline ? toIso(task.deadline) : null })),
     constitution: constitutionToApi(caseData.constitution),
   }
