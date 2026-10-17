@@ -126,8 +126,9 @@ deadline:null, depends_on:[], facts:[]; Python retains the original source as ev
 Use realistic estimates: emails 30, gym 60 training plus 20 travel buffer,
 presentation 120 minimum 90, Instagram 45 minimum 15. Respect explicit user durations.
 All estimates will be shown for confirmation before a trial. Never invent deadlines.
-An exam is context, NOT an obligation: "maths exam on Monday" alone does not make
-the study task mandatory. Only explicit obligation or a stated task deadline does.
+Exam/examen tasks are mandatory by default, including studying for an exam.
+Explicitly optional/not-required exam preparation remains optional.
+Other tasks need an explicit obligation or a stated task deadline to be mandatory.
 Maths, mathematics and studying belong to category learning, never other.
 An optional study task must have a realistic smaller minimum, not a full-duration lock.
 Ask at most three questions, only if an answer changes a duration or verdict.

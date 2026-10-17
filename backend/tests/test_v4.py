@@ -56,9 +56,9 @@ def test_init_fallback_has_realistic_estimates_and_echoed_constitution(client):
     tasks = result['case']['tasks']
     assert [t['duration_min'] for t in tasks] == [120, 60, 30, 120, 45]
     assert sum(t['duration_min'] for t in tasks) == 375
-    assert tasks[1]['buffer_min'] == 20 and not tasks[0]['mandatory']
-    assert tasks[0]['category'] == 'learning' and tasks[0]['allow_reduction']
-    assert tasks[0]['minimum_min'] < tasks[0]['duration_min']
+    assert tasks[1]['buffer_min'] == 20 and tasks[0]['mandatory']
+    assert tasks[0]['category'] == 'learning' and not tasks[0]['allow_reduction']
+    assert tasks[0]['minimum_min'] == tasks[0]['duration_min']
     assert all(t['deadline'] is None for t in tasks)
     assert [t['facts'] for t in tasks] == [[line] for line in body['raw_text'].splitlines()]
     assert result['case']['constitution'] == body['constitution']
@@ -114,13 +114,14 @@ def test_init_live_ignores_invented_facts_and_deadlines(client, monkeypatch):
 @pytest.mark.parametrize('mode', ['replay', 'live'])
 @pytest.mark.parametrize('text,mandatory', [
     ('Maths', False),
-    ("Study maths for Monday's exam", False),
-    ('Estudiar matemáticas para el examen del lunes', False),
+    ("Study maths for Monday's exam", True),
+    ('Study for exam 90 min', True),
+    ('Estudiar matemáticas para el examen del lunes', True),
     ('I must study maths for the exam', True),
     ('Tengo que estudiar matemáticas', True),
     ('Maths exam preparation is optional', False),
 ])
-def test_exam_context_and_learning_category_override_model_errors(client, monkeypatch, mode, text, mandatory):
+def test_exam_default_obligation_and_learning_category_override_model_errors(client, monkeypatch, mode, text, mandatory):
     monkeypatch.setenv('TRIAL_MODE', mode)
     class Provider:
         def __init__(self, settings): pass

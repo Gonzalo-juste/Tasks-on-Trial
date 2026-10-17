@@ -12,6 +12,10 @@ rules.rounds plus decision.exchanges while preserving round-one speech fields.
 
 ## Intake: POST /api/trial/init
 
+Latest user preference: exam/examen tasks default to mandatory again, unless
+explicitly optional. They remain learning tasks. Intake locks their confirmed
+duration; the /run contract continues to respect the submitted mandatory flag.
+
 Request: `{request_id, api_version: "1", raw_text, constitution}`. Use RFC 3339
 calendar timestamps. Supply one task per nonempty line, at most six; a line is at
 most 200 characters. More tasks return 422 instead of silently dropping work.

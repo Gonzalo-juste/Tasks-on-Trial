@@ -18,10 +18,10 @@ def lines_for(request):
 
 
 def required(line):
-    # An exam supplies context; it does not express a commitment to this task.
+    # Exam tasks are mandatory by default, unless explicitly marked optional.
     if re.search(r'\b(not mandatory|not required|optional|no es obligatori[oa]|opcional)\b', line, re.I):
         return False
-    return bool(re.search(r'\b(must|required|mandatory|have to|debo|tengo que|obligatori[oa]|deadline|due|vence|vencimiento|fecha límite)\b', line, re.I))
+    return bool(re.search(r'\b(exams?|examen|exámenes|must|required|mandatory|have to|debo|tengo que|obligatori[oa]|deadline|due|vence|vencimiento|fecha límite)\b', line, re.I))
 
 
 def learning_task(line):
