@@ -6,29 +6,30 @@ export const demoCase: Case = {
     start: "09:00",
     end: "18:00",
     fixed_blocks: [{ start: "13:00", end: "14:00", label: "Lunch" }],
-    priorities: ["health", "learning", "work", "leisure"],
-  },
+      priorities: ["health", "learning", "work", "leisure"],
+    },
+  rules: { mode: "quick", severity: 0.5, drama: 0.5 },
   tasks: [
-    { id: "maths", title: "Study maths", duration_min: 120, minimum_min: 120, mandatory: true, deadline: null, depends_on: [], category: "learning", allow_reduction: false, facts: ["Maths exam on Monday"] },
-    { id: "gym", title: "Go to the gym", duration_min: 60, minimum_min: 30, mandatory: false, deadline: null, depends_on: [], category: "health", allow_reduction: true, facts: [] },
-    { id: "emails", title: "Answer emails", duration_min: 60, minimum_min: 15, mandatory: false, deadline: null, depends_on: [], category: "work", allow_reduction: true, facts: ["Only five emails need a reply today"] },
-    { id: "presentation", title: "Prepare presentation", duration_min: 120, minimum_min: 90, mandatory: false, deadline: null, depends_on: [], category: "work", allow_reduction: true, facts: ["Presenting on Monday", "Only the core slides are essential; animations are optional"] },
-    { id: "instagram", title: "Check Instagram", duration_min: 45, minimum_min: 15, mandatory: false, deadline: null, depends_on: [], category: "leisure", allow_reduction: true, facts: ["I usually scroll when I am tired"] },
+    { id: "maths", title: "Study maths", duration_min: 120, buffer_min: 0, minimum_min: 120, mandatory: true, deadline: null, depends_on: [], category: "learning", allow_reduction: false, facts: ["Maths exam on Monday"] },
+    { id: "gym", title: "Go to the gym", duration_min: 60, buffer_min: 0, minimum_min: 30, mandatory: false, deadline: null, depends_on: [], category: "health", allow_reduction: true, facts: [] },
+    { id: "emails", title: "Answer emails", duration_min: 30, buffer_min: 0, minimum_min: 10, mandatory: false, deadline: null, depends_on: [], category: "work", allow_reduction: true, facts: ["Only five emails need a reply today"] },
+    { id: "presentation", title: "Prepare presentation", duration_min: 120, buffer_min: 0, minimum_min: 90, mandatory: false, deadline: null, depends_on: [], category: "work", allow_reduction: true, facts: ["Presenting on Monday", "Only the core slides are essential; animations are optional"] },
+    { id: "instagram", title: "Check Instagram", duration_min: 45, buffer_min: 0, minimum_min: 15, mandatory: false, deadline: null, depends_on: [], category: "leisure", allow_reduction: true, facts: ["I usually scroll when I am tired"] },
   ],
 }
 
-const personaById: Record<string, { emoji: string; name: string }> = {
-  maths: { emoji: "📐", name: "The Exam Hawk" },
-  gym: { emoji: "🏋️", name: "Coach Thunder" },
-  emails: { emoji: "📧", name: "The Inbox Martyr" },
-  presentation: { emoji: "📊", name: "The Perfectionist" },
-  instagram: { emoji: "📱", name: "Defender of Leisure" },
+const personaById: Record<string, { emoji: string; name: string; archetype: import("@/lib/types").Archetype }> = {
+  maths: { emoji: "📐", name: "The Exam Hawk", archetype: "book" },
+  gym: { emoji: "🏋️", name: "Coach Thunder", archetype: "dumbbell" },
+  emails: { emoji: "📧", name: "The Inbox Martyr", archetype: "envelope" },
+  presentation: { emoji: "📊", name: "The Perfectionist", archetype: "slides" },
+  instagram: { emoji: "📱", name: "Defender of Leisure", archetype: "phone" },
 }
 
 function makeDecision(taskId: string, title: string, original: number, approved: number, verdict: Decision["verdict"], effectiveTitle: string, defense: string, prosecution: string, reason: string, firstMove: string | null, actionPlan: PlanStep[], doneWhen: string | null, scheduleStatus: Decision["schedule_status"], extras: Partial<Pick<Decision, "cut_scope" | "release" | "suggested_need">> = {}): Decision {
   return {
     task_id: taskId,
-    persona: personaById[taskId] ?? { emoji: "⚖️", name: "The Applicant" },
+    persona: personaById[taskId] ?? { emoji: "⚖️", name: "The Applicant", archetype: "note" },
     defense,
     prosecution,
     verdict,
@@ -51,7 +52,7 @@ function makeDecision(taskId: string, title: string, original: number, approved:
 const initialDecisions: Decision[] = [
   makeDecision("maths", "Study maths", 120, 120, "APPROVED", "Study maths", "My exam is Monday. Two focused hours today will keep me on track.", "The defendant has supplied evidence of a real deadline.", "A near-term exam makes this a proportionate commitment.", "Open last week’s problem sheet and do question 1.", [{ step: "Redo last week’s problem sheet", minutes: 60 }, { step: "Review the two weakest topics", minutes: 45 }, { step: "Write a one-page summary of your mistakes", minutes: 15 }], "Problem sheet finished and mistakes summarised on one page.", "SCHEDULED"),
   makeDecision("gym", "Go to the gym", 60, 60, "APPROVED", "Go to the gym", "Movement keeps my mind sharp. I can be there and back in an hour.", "A useful habit, though the court will not award bonus minutes for optimism.", "A healthy commitment with a clear, bounded scope.", "Put your trainers by the door.", [{ step: "Training session", minutes: 45 }, { step: "Stretching", minutes: 15 }], "45 minutes of training and 15 of stretching done.", "SCHEDULED"),
-  makeDecision("emails", "Answer emails", 60, 15, "REDUCED", "Reply to the five urgent emails", "I need a full hour. Every single email deserves a reply!", "Only five need a reply today. That is fifteen minutes, not sixty.", "The confirmed workload supports a brief triage, not an open-ended inbox session.", "Search your inbox and star the five emails that need a reply today.", [{ step: "Star the five urgent emails", minutes: 3 }, { step: "Reply to each one in about two minutes", minutes: 10 }, { step: "Snooze everything else to Monday", minutes: 2 }], "Five replies sent. Nothing else.", "SCHEDULED", { cut_scope: ["Replying to the non-urgent emails (snooze them to Monday)", "Chasing inbox zero"] }),
+  makeDecision("emails", "Answer emails", 30, 15, "REDUCED", "Reply to the urgent emails", "I need a full hour. Every single email deserves a reply!", "Only five need a reply today. That is fifteen minutes, not sixty.", "The confirmed workload supports a brief triage, not an open-ended inbox session.", "Search your inbox and star the five emails that need a reply today.", [{ step: "Star the five urgent emails", minutes: 3 }, { step: "Reply to each one in about two minutes", minutes: 10 }, { step: "Snooze everything else to Monday", minutes: 2 }], "Five replies sent. Nothing else.", "SCHEDULED", { cut_scope: ["Replying to the non-urgent emails (snooze them to Monday)", "Chasing inbox zero"] }),
   makeDecision("presentation", "Prepare presentation", 120, 90, "REDUCED", "Build the essential slides", "A polished deck needs time. I cannot send something unfinished.", "The core slides are essential; animations are optional.", "The deadline is real, but optional polish is not part of the case.", "Write your three key messages on a sticky note.", [{ step: "Outline the three key messages", minutes: 15 }, { step: "Build the essential slides", minutes: 60 }, { step: "One run-through, out loud", minutes: 15 }], "Core slides built and rehearsed once, out loud.", "SCHEDULED", { cut_scope: ["Animations and transitions", "Visual polish beyond the core slides"] }),
   makeDecision("instagram", "Check Instagram", 45, 0, "DISMISSED", "Check Instagram", "I deserve a little scroll. It helps me switch off.", "The evidence says tiredness, not Instagram, is the actual need.", "A feed is not a restorative break. The need for rest is noted, not yet scheduled.", null, [], null, "NOT_APPLICABLE", { cut_scope: ["45 minutes of scrolling"], release: { action: "drop", note: "Not today. If you are tired, cross-examine it: the real need may be rest." }, suggested_need: { need: "rest", status: "unconfirmed" } }),
 ]
@@ -62,15 +63,15 @@ export const demoTrialResult: TrialResult = {
   revision: 1,
   source: "replay",
   status: "ok",
-  judge_summary: "Two approved, two reduced, one dismissed. The court returns 120 minutes to the defendant.",
+  judge_summary: "Two approved, two reduced, one dismissed. The court returns 90 minutes to the day.",
   decisions: initialDecisions,
   schedule: [
-    { task_id: "maths", start: "09:00", end: "11:00" },
-    { task_id: "gym", start: "11:00", end: "12:00" },
-    { task_id: "emails", start: "12:00", end: "12:15" },
-    { task_id: "presentation", start: "14:00", end: "15:30" },
+    { task_id: "maths", start: "09:00", end: "11:00", buffer_min: 0 },
+    { task_id: "gym", start: "11:00", end: "12:20", buffer_min: 20 },
+    { task_id: "emails", start: "12:20", end: "12:35", buffer_min: 0 },
+    { task_id: "presentation", start: "14:00", end: "15:30", buffer_min: 0 },
   ],
-  metrics: { original_min: 405, approved_min: 285, minutes_recovered: 120, pending_min: 0, free_capacity_min: 195 },
+  metrics: { original_min: 375, approved_min: 285, minutes_recovered: 90, pending_min: 0, free_capacity_min: 175 },
   conflicts: [],
   appeals_used: 0,
   change: null,
@@ -132,9 +133,9 @@ export function mockAppeal(previous: TrialResult, taskId: string, newFact: strin
   const decisions = previous.decisions.map((item) => item.task_id === taskId ? updatedDecision : item)
   const schedule = previous.schedule.filter((item) => item.task_id !== taskId)
   if (taskId === "instagram") {
-    schedule.push({ task_id: "instagram", start: "12:00", end: "12:15" })
+    schedule.push({ task_id: "instagram", start: "12:20", end: "12:35", buffer_min: 0 })
     const emails = schedule.find((item) => item.task_id === "emails")
-    if (emails) { emails.start = "12:15"; emails.end = "12:30" }
+    if (emails) { emails.start = "12:35"; emails.end = "12:50" }
   }
   return {
     ...previous,
@@ -144,7 +145,7 @@ export function mockAppeal(previous: TrialResult, taskId: string, newFact: strin
     judge_summary: "Appeal granted. Rest is a legitimate need. Fifteen minutes, screens off. The court still returns 105 minutes.",
     decisions,
     schedule: schedule.sort((a, b) => a.start.localeCompare(b.start)),
-    metrics: { ...previous.metrics, approved_min: 300, minutes_recovered: 105, free_capacity_min: 180 },
+    metrics: { ...previous.metrics, approved_min: 300, minutes_recovered: 75, free_capacity_min: 160 },
     appeals_used: 1,
     change: { task_id: taskId, previous_verdict: beforeVerdict, new_verdict: "REDUCED", previous_minutes_recovered: oldRecovered, delta_minutes_recovered: -15, new_fact: newFact },
   }

@@ -1,9 +1,12 @@
 export type Category = "health" | "learning" | "work" | "money" | "family" | "leisure" | "other"
 
+export type Archetype = "dumbbell" | "envelope" | "book" | "slides" | "phone" | "broom" | "cart" | "briefcase" | "heart" | "note"
+
 export interface Task {
   id: string
   title: string
   duration_min: number
+  buffer_min: number
   minimum_min: number
   mandatory: boolean
   deadline: string | null
@@ -11,8 +14,6 @@ export interface Task {
   category: Category
   allow_reduction: boolean
   facts: string[]
-  /** Travel/setup overhead before the task. Counts toward the budget, never toward the plan steps. */
-  buffer_min?: number
 }
 
 export interface Constitution {
@@ -23,9 +24,16 @@ export interface Constitution {
   priorities: Category[]
 }
 
+export interface Rules {
+  mode: "quick" | "immediate"
+  severity: number
+  drama: number
+}
+
 export interface Case {
   tasks: Task[]
   constitution: Constitution
+  rules: Rules
   /** Minutes the user grants the court today (after fixed commitments). Tasks compete for it. */
   budget_min?: number
 }
@@ -35,11 +43,13 @@ export type Verdict = "APPROVED" | "REDUCED" | "DISMISSED"
 export interface PlanStep {
   step: string
   minutes: number
+  detail?: string
+  tip?: string
 }
 
 export interface Decision {
   task_id: string
-  persona: { emoji: string; name: string }
+  persona: { emoji: string; name: string; archetype: Archetype }
   defense: string
   prosecution: string
   verdict: Verdict
@@ -68,7 +78,7 @@ export interface TrialResult {
   status: "ok" | "conflict"
   judge_summary: string
   decisions: Decision[]
-  schedule: { task_id: string; start: string; end: string; buffer_min?: number }[]
+  schedule: { task_id: string; start: string; end: string; buffer_min: number }[]
   metrics: {
     original_min: number
     approved_min: number
@@ -116,4 +126,40 @@ export interface InterrogationResult {
   rating: "supported" | "evasive" | "contradiction"
   credibility_delta: number
   proposal: Proposal | null
+}
+
+export interface Relation {
+  a: string
+  b: string
+  type: "ally" | "rival" | "depends"
+  reason: string
+}
+
+export interface WitnessQuestion {
+  id: string
+  task_id: string
+  question: string
+  options: { label: string; fact: string; patch: Partial<Task> | null }[]
+}
+
+export interface InitResult {
+  request_id: string
+  api_version: "1"
+  source: string
+  status: "ok"
+  case: Case
+  estimated: Record<string, string[]>
+  questions: WitnessQuestion[]
+  relations: Relation[]
+}
+
+export interface ReviseResult {
+  request_id: string
+  api_version: "1"
+  source: string
+  status: "ok"
+  task_id: string
+  first_move: string
+  done_when: string
+  action_plan: PlanStep[]
 }

@@ -4,7 +4,7 @@
 import type { Case, Category, Constitution, Decision, PlanStep, Task, TrialResult } from "./types"
 
 type BudgetTask = Task & { buffer_min?: number }
-type Slot = { task_id: string; start: string; end: string; buffer_min?: number }
+type Slot = { task_id: string; start: string; end: string; buffer_min: number }
 
 export const toMinutes = (time: string) => {
   const [hours, minutes] = time.split(":").map(Number)
@@ -59,7 +59,7 @@ export const BUDGET_STEP_MIN = 30
  * The granted budget is discretionary time after fixed commitments, so fixed blocks only limit it
  * when the calendar window is smaller: effective = min(granted, free calendar capacity).
  */
-export function budget(caseData: Case) {
+export function budgetFor(caseData: Case) {
   const { usable_min } = dayCapacity(caseData.constitution)
   const granted_min = caseData.budget_min ?? usable_min
   const effective_min = Math.min(granted_min, usable_min)
@@ -81,12 +81,43 @@ export function budget(caseData: Case) {
 
 const hours = (minutes: number) => (minutes % 60 ? `${minutes} minutes` : `${minutes / 60} hour${minutes === 60 ? "" : "s"}`)
 
+/** Shape the Docket's meter consumes. */
+export interface BudgetSummary {
+  grantedMinutes: number
+  requestedMinutes: number
+  mandatoryMinutes: number
+  overBudgetMinutes: number
+  bufferMinutes: number
+  defendants: number
+  impossible: boolean
+}
+
+/** The Docket's meter: what the tasks (work + buffers) demand versus the minutes granted. */
+export function budget(tasks: Task[], grantedMinutes: number): BudgetSummary {
+  const granted = Math.max(0, Math.round(grantedMinutes))
+  const cost = (task: BudgetTask) => Math.max(0, task.duration_min) + bufferOf(task)
+  const requestedMinutes = tasks.reduce((sum, task) => sum + cost(task), 0)
+  const mandatoryMinutes = tasks.filter((task) => task.mandatory).reduce((sum, task) => sum + cost(task), 0)
+  return {
+    grantedMinutes: granted,
+    requestedMinutes,
+    mandatoryMinutes,
+    overBudgetMinutes: Math.max(0, requestedMinutes - granted),
+    bufferMinutes: tasks.reduce((sum, task) => sum + bufferOf(task), 0),
+    defendants: tasks.length,
+    impossible: mandatoryMinutes > granted,
+  }
+}
+
 /** Copy for the Docket's meter. */
-export function budgetHeadline(b: ReturnType<typeof budget>) {
-  const count = `You have granted the court ${hours(b.effective_min)}. Your tasks demand ${b.requested_min} minutes.`
-  if (b.impossible) return { title: count, verdict: "Impossible as filed: your mandatory tasks alone exceed the budget. Grant more time or review what is mandatory." }
-  if (b.over_by_min > 0) return { title: count, verdict: `${b.over_by_min} minutes over budget. Someone must make a case.` }
-  return { title: count, verdict: `${b.effective_min - b.requested_min} minutes to spare. The court may still cut.` }
+export function budgetHeadline(summary: BudgetSummary) {
+  const title = `You have granted the court ${hours(summary.grantedMinutes)}. Your tasks demand ${summary.requestedMinutes} minutes.`
+  const line = summary.impossible
+    ? "Impossible as filed: your mandatory tasks alone exceed the budget. Grant more time or review what is mandatory."
+    : summary.overBudgetMinutes > 0
+      ? `${summary.overBudgetMinutes} minutes over budget. Someone must make a case.`
+      : `${summary.grantedMinutes - summary.requestedMinutes} minutes to spare. The court may still cut.`
+  return { title, line, defendants: `${summary.defendants} ${summary.defendants === 1 ? "defendant" : "defendants"} summoned` }
 }
 
 /** Clock times for each step: the slot starts with its buffer, then steps run back to back. */
@@ -160,7 +191,7 @@ function placementOrder(tasks: BudgetTask[], priorities: Category[]) {
 export function planDay(caseData: Case, approved: Record<string, number>) {
   const free = dayCapacity(caseData.constitution).free.map(([a, b]) => [a, b] as [number, number])
   const tasks = placementOrder(caseData.tasks as BudgetTask[], caseData.constitution.priorities)
-  let remainingBudget = budget(caseData).effective_min
+  let remainingBudget = budgetFor(caseData).effective_min
   const ends: Record<string, number> = {}
   const schedule: Slot[] = []
   const pending: { task_id: string; reason: "no_fit" | "deadline" | "depends_unmet" }[] = []
@@ -205,7 +236,7 @@ export function fallbackResult(caseData: Case): TrialResult {
   const pendingById = new Map(pending.map((p) => [p.task_id, p.reason]))
   const decisions: Decision[] = caseData.tasks.map((task) => ({
     task_id: task.id,
-    persona: { emoji: "🗒️", name: task.title },
+    persona: { emoji: "🗒️", name: task.title, archetype: "note" },
     defense: "The court is offline. I stand on my confirmed duration.",
     prosecution: "No objection recorded: rule-based fallback.",
     verdict: "APPROVED",
@@ -230,7 +261,7 @@ export function fallbackResult(caseData: Case): TrialResult {
     .filter((d) => d.schedule_status === "PENDING")
     .reduce((sum, d) => sum + d.approved_min + (d.buffer_min ?? 0), 0)
   const scheduledLoad = schedule.reduce((sum, slot) => sum + toMinutes(slot.end) - toMinutes(slot.start), 0)
-  const b = budget(caseData)
+  const b = budgetFor(caseData)
   return {
     api_version: "1",
     request_id: `fallback-${Date.now()}`,

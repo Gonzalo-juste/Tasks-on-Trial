@@ -59,6 +59,20 @@ export function calibrationFact(archetype: Archetype): string | null {
   return `Last time, ${last.title} took ${last.actual_min} min (planned ${last.planned_min})`
 }
 
+/** Adds "last time it took…" evidence to each task that has a calibration record. */
+export function calibrateCase<T extends { tasks: { title: string; facts: string[] }[] }>(
+  caseData: T,
+  archetypeOf: (title: string) => Archetype,
+): T {
+  return {
+    ...caseData,
+    tasks: caseData.tasks.map((task) => {
+      const fact = calibrationFact(archetypeOf(task.title))
+      return fact && !task.facts.includes(fact) ? { ...task, facts: [...task.facts, fact] } : task
+    }),
+  }
+}
+
 /** Demo only: a believable history so calibration is visible within a 3-minute pitch. */
 export function seedDemoCalibration() {
   if (load().length) return

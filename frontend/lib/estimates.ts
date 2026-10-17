@@ -175,15 +175,27 @@ export function captureLine(line: string, taken: Set<string>, ratios: Partial<Re
   }
 }
 
-/** Quick capture: one task per line. The first six enter the docket; the rest wait outside, never silently dropped. */
-export function quickCapture(rawText: string, ratios: Partial<Record<Archetype, number>> = {}) {
+export interface QuickCaptureResult {
+  tasks: Task[]
+  /** Guessed fields per task id, so the UI can mark them "est.". */
+  estimated: Record<string, EstimatedField[]>
+  /** Lines beyond the sixth: they wait outside the docket, never silently dropped. */
+  waiting: string[]
+  captured: CapturedTask[]
+}
+
+/** Quick capture: one task per line. The first six enter the docket. */
+export function quickCapture(rawText: string, ratios: Partial<Record<Archetype, number>> = {}): QuickCaptureResult {
   const taken = new Set<string>()
   const lines = rawText
     .split(/\r?\n|;/)
     .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim())
     .filter(Boolean)
+  const captured = lines.slice(0, MAX_TASKS).map((line) => captureLine(line, taken, ratios))
   return {
-    tasks: lines.slice(0, MAX_TASKS).map((line) => captureLine(line, taken, ratios)),
+    tasks: captured.map((c) => c.task),
+    estimated: Object.fromEntries(captured.map((c) => [c.task.id, c.estimated])),
     waiting: lines.slice(MAX_TASKS),
+    captured,
   }
 }

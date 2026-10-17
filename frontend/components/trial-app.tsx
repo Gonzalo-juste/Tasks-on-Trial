@@ -247,7 +247,7 @@ function DocketStage({ caseData, updateCase, busy, onLoadDemo, onStart, onReplay
 }) {
   const totalRequested = caseData.tasks.reduce((total, task) => total + task.duration_min, 0)
   const updateTask = (id: string, patch: Partial<Task>) => updateCase((previous) => ({ ...previous, tasks: previous.tasks.map((task) => task.id === id ? { ...task, ...patch } : task) }))
-  const addTask = () => updateCase((previous) => previous.tasks.length >= 6 ? previous : ({ ...previous, tasks: [...previous.tasks, { id: `task-${Date.now()}`, title: "New task", duration_min: 30, minimum_min: 15, mandatory: false, deadline: null, depends_on: [], category: "work", allow_reduction: true, facts: [] }] }))
+  const addTask = () => updateCase((previous) => previous.tasks.length >= 6 ? previous : ({ ...previous, tasks: [...previous.tasks, { id: `task-${Date.now()}`, title: "New task", duration_min: 30, buffer_min: 0, minimum_min: 15, mandatory: false, deadline: null, depends_on: [], category: "work", allow_reduction: true, facts: [] }] }))
   const removeTask = (id: string) => updateCase((previous) => ({ ...previous, tasks: previous.tasks.filter((task) => task.id !== id).map((task) => ({ ...task, depends_on: task.depends_on.filter((dependency) => dependency !== id) })) }))
   const setConstitution = (patch: Partial<Case["constitution"]>) => updateCase((previous) => ({ ...previous, constitution: { ...previous.constitution, ...patch } }))
   const movePriority = (index: number, direction: -1 | 1) => updateCase((previous) => {

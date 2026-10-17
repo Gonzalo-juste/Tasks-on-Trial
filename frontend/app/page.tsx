@@ -1,6 +1,6 @@
-import TrialApp from "@/components/trial-app"
+import TrialExperience from "@/components/trial-experience"
 
 export default function Page() {
-  return <TrialApp />
+  return <TrialExperience />
 }
 

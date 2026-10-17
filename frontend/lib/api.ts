@@ -1,5 +1,5 @@
 import { demoTrialResult, mockAppeal, mockInterrogation } from "@/lib/mocks"
-import type { Case, InterrogationResult, Proposal, QuestionType, TrialResult } from "@/lib/types"
+import type { Case, Constitution, InterrogationResult, Proposal, QuestionType, TrialResult } from "@/lib/types"
 
 const MOCK_DELAY_MS = 1500
 const API_VERSION = "1"
@@ -22,7 +22,8 @@ export interface AppealInput {
   base_revision: number
 }
 
-const requestId = (prefix: string) => `${prefix}-${Date.now()}`
+export const requestId = (prefix: string) => `${prefix}-${Date.now()}`
+export { API_VERSION }
 
 // The UI works with "HH:MM"; the API contract uses RFC 3339 in Europe/London.
 const TIMEZONE = "Europe/London"
@@ -44,35 +45,72 @@ function londonOffset() {
 const toIso = (value: string) => (isClock(value) ? `${londonDate()}T${value}:00${londonOffset()}` : value)
 const toClock = (value: string) => (isClock(value) ? value : value.slice(11, 16))
 
-function caseToApi(caseData: Case): Case {
+export function constitutionToApi(constitution: Constitution): Constitution {
+  return {
+    ...constitution,
+    timezone: TIMEZONE,
+    start: toIso(constitution.start),
+    end: toIso(constitution.end),
+    fixed_blocks: constitution.fixed_blocks.map((block) => ({ ...block, start: toIso(block.start), end: toIso(block.end) })),
+  }
+}
+
+const clockMinutes = (time: string) => {
+  const [h, m] = toClock(time).split(":").map(Number)
+  return h * 60 + m
+}
+
+/** The Docket sets the window to start + granted budget + commitments; recover the budget from it when absent. */
+function grantedBudget(caseData: Case) {
+  if (caseData.budget_min !== undefined) return caseData.budget_min
+  const { start, end, fixed_blocks } = caseData.constitution
+  const fixed = fixed_blocks.reduce((sum, block) => sum + Math.max(0, clockMinutes(block.end) - clockMinutes(block.start)), 0)
+  return Math.max(0, clockMinutes(end) - clockMinutes(start) - fixed)
+}
+
+// The backend rejects budget_min until it supports it; the Docket's window already encodes the budget.
+const SEND_BUDGET = process.env.NEXT_PUBLIC_SEND_BUDGET === "true"
+
+export function caseToApi(caseData: Case): Case {
+  const { budget_min: _omit, ...rest } = caseData
+  return {
+    ...rest,
+    ...(SEND_BUDGET ? { budget_min: grantedBudget(caseData) } : {}),
+    tasks: caseData.tasks.map((task) => ({ ...task, deadline: task.deadline ? toIso(task.deadline) : null })),
+    constitution: constitutionToApi(caseData.constitution),
+  }
+}
+
+/** Back to the UI's "HH:MM"; a missing buffer_min means zero. */
+export function caseFromApi(caseData: Case): Case {
   const { constitution } = caseData
   return {
-    tasks: caseData.tasks.map((task) => ({ ...task, deadline: task.deadline ? toIso(task.deadline) : null })),
+    ...caseData,
+    tasks: caseData.tasks.map((task) => ({ ...task, buffer_min: task.buffer_min ?? 0, deadline: task.deadline ? toClock(task.deadline) : null })),
     constitution: {
       ...constitution,
-      timezone: TIMEZONE,
-      start: toIso(constitution.start),
-      end: toIso(constitution.end),
-      fixed_blocks: constitution.fixed_blocks.map((block) => ({ ...block, start: toIso(block.start), end: toIso(block.end) })),
+      start: toClock(constitution.start),
+      end: toClock(constitution.end),
+      fixed_blocks: constitution.fixed_blocks.map((block) => ({ ...block, start: toClock(block.start), end: toClock(block.end) })),
     },
   }
 }
 
-const resultToApi = (result: TrialResult): TrialResult => ({
+export const resultToApi = (result: TrialResult): TrialResult => ({
   ...result,
   schedule: result.schedule.map((slot) => ({ ...slot, start: toIso(slot.start), end: toIso(slot.end) })),
 })
 
-const resultFromApi = (result: TrialResult): TrialResult => ({
+export const resultFromApi = (result: TrialResult): TrialResult => ({
   ...result,
-  schedule: result.schedule.map((slot) => ({ ...slot, start: toClock(slot.start), end: toClock(slot.end) })),
+  schedule: result.schedule.map((slot) => ({ ...slot, buffer_min: slot.buffer_min ?? 0, start: toClock(slot.start), end: toClock(slot.end) })),
 })
 
 function pause() {
   return new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS))
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+export async function post<T>(path: string, body: unknown): Promise<T> {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL
   if (!baseUrl) throw new Error("The live court is not connected yet. You can retry, or use the included replay case.")
   const response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
