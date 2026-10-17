@@ -43,7 +43,7 @@ def verify_result(case: Case, result: TrialResult) -> None:
     usable = effective_budget(case)
     scheduled = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions if d.schedule_status == 'SCHEDULED')
     pending = sum(d.approved_min + tasks[d.task_id].buffer_min for d in result.decisions if d.schedule_status == 'PENDING')
-    expected = (original,approved,original-approved,pending,usable-scheduled)
+    expected = (original,approved,original-approved,pending,usable-scheduled-sum(s.rest_after_min for s in result.schedule))
     observed = (m.original_min,m.approved_min,m.minutes_recovered,m.pending_min,m.free_capacity_min)
     if observed != expected or sum(d.saved_min for d in result.decisions) != m.minutes_recovered:
         raise ValueError('Result metrics do not conserve task and calendar minutes.')

@@ -190,6 +190,12 @@ def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categor
     budget = effective_budget(case)
     def load():
         return sum(d.approved_min+tasks[d.task_id].buffer_min for d in decisions if d.verdict != 'DISMISSED')
+    def needs_cuts():
+        if not case.constitution.break_min:
+            return load() > budget
+        trial = [d.model_copy(deep=True) for d in decisions]
+        plan(case,trial,categories)
+        return any(d.verdict != 'DISMISSED' and d.schedule_status != 'SCHEDULED' for d in trial)
     def discard(task):
         d,score = by_id[task.id],scores[task.id]
         if any(task.id in other.depends_on and by_id[other.id].verdict != 'DISMISSED' for other in case.tasks):
@@ -209,13 +215,13 @@ def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categor
 
     # Unsupported leisure is the first place to recover capacity.
     for task in ordered:
-        if load() <= budget:
+        if not needs_cuts():
             break
         if not task.mandatory and by_id[task.id].verdict != 'DISMISSED' and categories.get(task.id,task.category) == 'leisure' and not scores[task.id].supporting:
             discard(task)
     # Give every reducible legitimate need its minimum before cancelling one whole.
     for task in ordered:
-        if load() <= budget:
+        if not needs_cuts():
             break
         d,score = by_id[task.id],scores[task.id]
         category = categories.get(task.id,task.category)
@@ -226,7 +232,7 @@ def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categor
             allocate_work(task,d,task.minimum_min,f'budget_reduction: {driver}; lowest eligible score {score.total:g}.')
             cut_ids.add(task.id)
     for task in ordered:
-        if load() <= budget:
+        if not needs_cuts():
             break
         if not task.mandatory and by_id[task.id].verdict != 'DISMISSED':
             discard(task)

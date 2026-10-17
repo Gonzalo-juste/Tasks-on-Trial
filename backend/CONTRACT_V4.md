@@ -127,6 +127,20 @@ displaying a plan for an obsolete budget. Duplicate request IDs remain idempoten
 
 ## Rules
 
+Optional constitution.break_min is a strict integer 0..1440, default 0. Scheduled
+slots add rest_after_min when nonzero: slot start -> buffer -> approved work ->
+rest -> slot end. Last task has no rest; the task preceding the next fixed
+commitment also skips it. Lunch/fixed blocks remain unavailable to tasks.
+
+Breaks consume calendar budget and reduce free_capacity_min. They never enter
+original_min, approved_min, saved_min, minutes_recovered or pending_min. Those
+retain their existing work-plus-buffer meanings. Budget fitting and refill use
+the actual break-aware calendar. Work finishes by its deadline; a trailing rest
+may finish afterward. Dependencies wait until the preceding full slot ends.
+Omitting break_min (or sending 0) preserves the previous scheduling path and
+legacy JSON/fingerprints. A nonzero value is part of the confirmed case and
+requires a fresh trial; do not add it mid-session to an existing previous_result.
+
 Optional case.rules: `{mode:"quick"|"standard"|"grand"|"immediate", rounds:1|2|3, severity:0..1, drama:0..1}`.
 These settings reach the run prompt. Mode selects frontend pacing and default round count;
 explicit rules.rounds takes precedence. Severity/drama

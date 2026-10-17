@@ -12,6 +12,10 @@ policy and 1–3 rounds of exchanges generated together in one /run call. It
 supersedes the category-only cut order described in earlier checkpoints.
 Courtroom exchanges are optional enrichment; invalid lists are dropped while
 preserving valid live verdicts. Clients can always use defense/prosecution.
+Optional case.constitution.break_min adds pre-assigned rest after scheduled work;
+schedule.rest_after_min is omitted at zero. Breaks consume budget/free capacity,
+not work or recovered-minute metrics. The last task and tasks before fixed
+commitments skip rest. Default 0 preserves the existing demo behavior.
 
 ## Start locally
 

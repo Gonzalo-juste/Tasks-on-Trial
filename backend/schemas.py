@@ -40,6 +40,7 @@ class Constitution(Model):
     end: AwareDatetime
     fixed_blocks: Annotated[list[FixedBlock], Field(max_length=24)] = []
     priorities: Annotated[list[Category], Field(max_length=7)] = []
+    break_min: Annotated[StrictInt, Field(ge=0, le=1440, exclude_if=lambda v: v == 0)] = 0
 
 class Rules(Model):
     mode: Literal['quick', 'standard', 'grand', 'immediate'] = 'quick'
@@ -123,6 +124,7 @@ class ScheduleSlot(Model):
     start: AwareDatetime
     end: AwareDatetime
     buffer_min: Annotated[StrictInt, Field(ge=0, le=1440, exclude_if=lambda v: v == 0)] = 0
+    rest_after_min: Annotated[StrictInt, Field(ge=0, le=1440, exclude_if=lambda v: v == 0)] = 0
 
 class Metrics(Model):
     original_min: Annotated[StrictInt, Field(ge=0)]
