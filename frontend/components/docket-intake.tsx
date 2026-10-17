@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { ArrowRight, Check, ChevronDown, Clock3, Gavel, Heart, Plus, Sparkles } from "lucide-react"
 import { TaskCharacter } from "@/components/task-character-art"
+import { JusticeScale } from "@/components/justice-scale"
 import { budget, budgetHeadline } from "@/lib/budget"
 import { quickCapture } from "@/lib/estimates"
 import { applyWitnessAnswer, pickWitnessQuestion } from "@/lib/witness"
@@ -169,7 +170,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
   return <section className="new-stage docket-new budget-docket">
     <header className="new-stage-heading budget-docket-heading"><div><span className="new-eyebrow">THE COURT OF A REASONABLE DAY · SESSION 01</span><h1>Your time.<br /><em>Their burden of proof.</em></h1><p>Add what wants your attention. The court decides what deserves it.</p></div><div className="docket-seal"><Gavel /><span>THE<br />DOCKET</span></div></header>
 
-    <section className="budget-first-panel docket-paper" aria-labelledby="available-time-title">
+    <div className="docket-stage-grid"><div className="docket-stage-main"><section className="budget-first-panel docket-paper" aria-labelledby="available-time-title">
       <div className="budget-first-top"><div><span className="new-eyebrow">FIRST, SET THE LIMIT</span><h2 id="available-time-title">How much time are you willing to give today?</h2></div><label className="available-time-label">Available time<span>{Math.floor(grantedMinutes / 60)}h{grantedMinutes % 60 ? ` ${grantedMinutes % 60}m` : ""}</span></label></div>
       <div className="budget-controls-row"><div className="budget-presets" role="group" aria-label="Available time presets">{[120, 240, 360, 480].map((value) => <button key={value} className={`budget-preset ${grantedMinutes === value ? "selected" : ""}`} aria-pressed={grantedMinutes === value} onClick={() => setAvailableMinutes(value)}>{value / 60}h{value === 240 && <small>Suggested</small>}</button>)}</div><div className="budget-stepper"><button aria-label="Reduce available time by 30 minutes" onClick={() => setAvailableMinutes(grantedMinutes - 30)}>−</button><span>30 min steps</span><button aria-label="Add 30 minutes of available time" onClick={() => setAvailableMinutes(grantedMinutes + 30)}>+</button></div></div>
       <p className="budget-caption">Excludes meetings and other fixed commitments.</p>
@@ -214,8 +215,7 @@ export default function DocketIntake({ caseData, onCase, rawText, onRawText, onB
         </article>
       })}</div>
       {waiting > 0 && <button className="waiting-docket-button" onClick={() => setVisibleStart(nextBatchStart < docket.length ? nextBatchStart : 0)}>{visibleStart === 0 ? `${waiting} waiting outside the docket · Swap in` : nextBatchStart < docket.length ? `${docket.length - nextBatchStart} waiting outside the docket · Swap in` : "Back to the first six"}<ArrowRight /></button>}
-    </section>
-
+    </section></div><aside className="docket-stage-scale"><JusticeScale grantedMinutes={summary.grantedMinutes} requestedMinutes={summary.requestedMinutes} impossible={summary.impossible} verdictLine={docket.length ? headline.line : "File your tasks and watch the scale."} defendants={docket.map((task) => ({ id: task.id, title: task.title, archetype: archetypeForTask(task), minutes: task.duration_min + (task.buffer_min ?? 0) }))} /></aside></div>
     <section className="priorities-block docket-paper budget-priorities"><div><Heart /><strong>What matters most</strong><small>Order the principles the judge should consider.</small></div><ol>{caseData.constitution.priorities.map((category, index) => <li key={category}><span className={`priority-gem ${category}`}>{priorityMarks[category]}</span><b>{category}</b><button aria-label={`Move ${category} up`} disabled={index === 0} onClick={() => movePriority(index, -1)}>↑</button><button aria-label={`Move ${category} down`} disabled={index === caseData.constitution.priorities.length - 1} onClick={() => movePriority(index, 1)}>↓</button></li>)}</ol></section>
 
     {question && skippedQuestion !== question.id && <section className="single-witness-section"><div className="single-witness-icon" aria-hidden="true">⚖</div><div className="single-witness-content"><span className="new-eyebrow">ONE QUESTION FROM THE BENCH</span>{witnessTask && <div className="witness-about"><TaskCharacter archetype={archetypeForTask(witnessTask)} compact variant="defendant" prisonerNumber={docket.findIndex((task) => task.id === witnessTask.id) + 1} label={`Question about ${witnessTask.title}`} /><span>About defendant #{String(docket.findIndex((task) => task.id === witnessTask.id) + 1).padStart(2, "0")}<strong>{witnessTask.title}</strong></span></div>}<h2>{question.question}</h2><div className="single-witness-options">{question.options.map((option) => <button key={option.label} disabled={answered} onClick={() => applyAnswer(option)}>{option.label}<ArrowRight /></button>)}{!answered && <button className="skip-witness-button" onClick={() => setSkippedQuestion(question.id)}>Skip question <ArrowRight /></button>}</div>{answered && <span className="witness-answer-confirmation"><Check /> The fact is in the record.</span>}</div></section>}
