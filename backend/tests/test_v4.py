@@ -222,7 +222,7 @@ def test_api_accepts_budget_and_caps_fallback_placements(client, monkeypatch):
     assert result['metrics']['free_capacity_min'] == 0
 
 
-@pytest.mark.parametrize('judge_cuts,allocated', [(True, 225), (False, 215)])
+@pytest.mark.parametrize('judge_cuts,allocated', [(True, 225), (False, 180)])
 def test_api_returns_the_judge_first_budget_outcomes(client, monkeypatch, judge_cuts, allocated):
     from backend.tests.test_budget_verdicts import chaotic_case, recommendations
     monkeypatch.setenv('TRIAL_MODE', 'live')

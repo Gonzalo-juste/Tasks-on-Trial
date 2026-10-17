@@ -1,5 +1,8 @@
 # Explicit budget and buffer-inclusive accounting
 
+> The scoring update in EVALUATION_ROUNDS.md supersedes the category-only cut
+> order and illustrative totals below. Budget and buffer accounting remain valid.
+
 Case accepts optional budget_min: a strict integer from 0 to 1440. Missing/null
 uses calendar capacity. Effective budget is the smaller of the explicit value and
 window minutes minus the union of fixed commitments. The scheduler caps actual

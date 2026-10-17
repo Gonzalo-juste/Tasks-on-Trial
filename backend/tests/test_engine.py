@@ -20,6 +20,9 @@ def from_demo(trial_request):
         data = {k:row[k] for k in ['task_id','persona','defense','prosecution','approved_min','effective_title','cut_scope','first_move','action_plan','done_when','release','suggested_need']}
         data['recommendation'] = row['verdict']
         data['fact_cited'] = task.facts[-1] if row['verdict'] in {'REDUCED', 'DISMISSED'} else None
+        data['defense'], data['prosecution'] = data['defense'][:200], data['prosecution'][:200]
+        data['exchanges'] = [dict(round=1,speaker='defense',text=data['defense']),
+                             dict(round=1,speaker='prosecution',text=data['prosecution'])]
         proposals.append(data)
     return RunProposal.model_validate({'decisions':proposals,'judge_summary':'Ignored contradictory summary: 999 minutes'})
 

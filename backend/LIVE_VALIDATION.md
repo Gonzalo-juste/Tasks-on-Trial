@@ -77,3 +77,50 @@ cover concurrent plans and a pardon making an in-flight plan stale.
 Sources for the reasoning setting and available model families:
 - https://docs.z.ai/guides/llm/glm-5.3
 - https://nebius.com/services/token-factory/models/glm-models-inference
+
+## Grand trial: six tasks and three rounds (17 October 2026)
+
+The prepared five-task case plus a synthetic 15-minute "Tidy desk" task was used
+for a six-task/three-round structural check. All 36 speeches share one generation.
+The first schema allowed exchanges to be omitted; Lightning did omit them. Making
+exchanges required with exactly six items per task resolved the observed omission.
+
+| Model / schema | Calls | Observed latency | Result |
+| --- | --- | --- | --- |
+| Lightning, required exchanges | 1 | 14,641 ms | live, 36 valid exchanges |
+| Lightning, stronger grounding prompt | 1 | 20,101 ms | live, 36 valid exchanges |
+| GLM-5.3-Flash, same Grand workload | 1 | 25,002 ms | timeout/fallback |
+
+Lightning remains the /run model; Flash remains the faster detailed-plan model.
+Grand's measured 20-second wait matters for a two-minute presentation: Quick is
+the safer live pacing unless the Grand generation is already ready. These samples
+do not establish a reliable upper latency bound or an all-task quality benchmark.
+
+Manual review found unsupported personal-history claims in an earlier response.
+The prompt now forbids these and a targeted validator rejects obvious patterns.
+Later review still found speculative numerical benefits; the prompt was tightened
+again to forbid invented quantified savings and label estimates. That last prompt
+edit has not been retested live. Structural validation cannot guarantee semantic
+grounding, novel arguments or the logically stronger verdict. Rehearse the actual
+output; do not present illustrative recovered totals as guaranteed results.
+
+Cross-review recovery/questioning changes are covered locally with fake providers:
+no-fact dismissed task -> proposal -> accepted appeal, no mutation on questioning,
+live build/verification failures -> labelled fallback, and unrecoverable validation
+-> structured 503 with CORS.
+
+Three bounded live /interrogate checks used the already authorised Instagram example
+with its facts removed and a dismissed decision. Each completed in one provider call:
+
+| Purpose prompt | Observed latency | Result |
+| --- | --- | --- |
+| Optional alternative instruction | 420 ms | No comment; no proposal |
+| Explicit alternative instruction | 742 ms | Proposal still shortened Instagram; unsuitable |
+| Explicit instruction plus alternative example | 804 ms | Screen-free break, 15 minutes, valid 2+13 plan |
+
+The final response retained "No comment."/evasive for the evidence-backed answer and
+marked the possible rest need unconfirmed in cut_scope. It invented no fatigue or
+personal history. The 30 saved minutes on the proposal describe its potential scope
+change; questioning does not apply those savings. The plan sum was validated before
+and after proposal normalization. This demonstrates the prepared no-fact purpose
+path; it does not guarantee the same proposal for every task or future call.

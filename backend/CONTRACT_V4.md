@@ -7,6 +7,8 @@ responses remain compatible; v4 demo arithmetic is covered separately in test_v4
 
 See BUDGET_UPDATE.md for accepted case.budget_min, buffered metrics, judge-first
 verdict precedence and deterministic cuts only when the model allocation is over budget.
+EVALUATION_ROUNDS.md now replaces category-only cuts with burden scoring and adds
+rules.rounds plus decision.exchanges while preserving round-one speech fields.
 
 ## Intake: POST /api/trial/init
 
@@ -116,8 +118,9 @@ displaying a plan for an obsolete budget. Duplicate request IDs remain idempoten
 
 ## Rules
 
-Optional case.rules: `{mode:"quick"|"standard"|"grand"|"immediate", severity:0..1, drama:0..1}`.
-These settings reach the run prompt. Mode is frontend pacing only; severity/drama
+Optional case.rules: `{mode:"quick"|"standard"|"grand"|"immediate", rounds:1|2|3, severity:0..1, drama:0..1}`.
+These settings reach the run prompt. Mode selects frontend pacing and default round count;
+explicit rules.rounds takes precedence. Severity/drama
 never override facts, mandatory protection, minimums or budget validation.
 
 Travel/setup facts explain buffer time; they are not cited as evidence for reducing

@@ -1,6 +1,7 @@
 """Independent conservation checks on the final public result."""
 from .schemas import Case, TrialResult
 from .scheduler import effective_budget, verify_schedule
+from .courtroom import round_count, validate_exchanges
 
 
 def verify_result(case: Case, result: TrialResult) -> None:
@@ -10,6 +11,10 @@ def verify_result(case: Case, result: TrialResult) -> None:
         raise ValueError('Result must contain each input task exactly once.')
     for d in result.decisions:
         task = tasks[d.task_id]
+        if d.exchanges:
+            validate_exchanges(d.exchanges,round_count(case),d.defense,d.prosecution)
+        elif result.source != 'replay':
+            raise ValueError('Generated decisions need courtroom exchanges.')
         saved = task.duration_min - d.approved_min + (task.buffer_min if d.verdict == 'DISMISSED' else 0)
         if d.original_min != task.duration_min or d.saved_min != saved:
             raise ValueError('Per-task minutes are inconsistent.')

@@ -112,13 +112,29 @@ class TrialService:
                     raise ApiError('REPLAY_CASE_MISMATCH', 'Replay only supports the prepared demo case; switch to live mode for other tasks.', ['case'])
                 result = TrialResult.model_validate(fixture('run.response.json'))
                 result.request_id = request.request_id
+                verify_result(request.case, result)
             else:
+                meta = Meta()
                 try:
                     proposal, meta = await self.provider_factory(settings).run(request.case)
                     result = build_result(request.case, proposal, request.request_id,'live', meta)
-                except ProviderFailure as exc:
-                    result = build_result(request.case, None, request.request_id,'fallback', failure_meta(exc))
-            verify_result(request.case,result)
+                    verify_result(request.case, result)
+                except (ProviderFailure, ValueError) as exc:
+                    if isinstance(exc, ProviderFailure):
+                        meta = failure_meta(exc)
+                        reason = exc.reason
+                    else:
+                        reason = 'invalid_live_result'
+                    # Do not log model output, input facts or raw exception text.
+                    logger.warning('run_fallback model=%s reason=%s error_type=%s calls=%s latency_ms=%s',
+                        settings.model, reason, type(exc).__name__, meta.llm_calls, meta.latency_ms)
+                    try:
+                        result = build_result(request.case, None, request.request_id,'fallback', meta)
+                        verify_result(request.case, result)
+                    except ValueError as fallback_exc:
+                        logger.error('run_unavailable reason=invalid_fallback error_type=%s', type(fallback_exc).__name__)
+                        raise ApiError('PROVIDER_UNAVAILABLE',
+                            'The court could not validate a safe result. Please retry.', status_code=503) from None
             self.store.register(request, result)
             return self.store.remember('run', request, result)
 
@@ -146,7 +162,7 @@ class TrialService:
                 result.base_revision = session.result.revision
             else:
                 value = None
-                if settings.mode != 'replay' and (task.facts or task.deadline):
+                if settings.mode != 'replay':
                     try:
                         value, _meta = await self.provider_factory(settings).interrogate(task,decision,request.question_type,request.question_text)
                     except ProviderFailure:
@@ -158,7 +174,7 @@ class TrialService:
                         question_type=request.question_type,answer=value.answer,
                         rating='evasive' if no_comment else value.rating,
                         credibility_delta=-0.1 if no_comment else value.credibility_delta,
-                        proposal=None if no_comment else make_proposal(task,value.proposal))
+                        proposal=make_proposal(task,value.proposal))
                 else:
                     result = InterrogateResult(request_id=request.request_id,
                         base_revision=session.result.revision,source='fallback',task_id=task.id,
@@ -241,8 +257,11 @@ class TrialService:
                     proposal, meta = await self.provider_factory(settings).run(case, task.id, request.new_fact, replacement)
                     r = proposal.decisions[0]
                     old.defense, old.prosecution = r.defense, r.prosecution
+                    old.exchanges = [e.model_copy(deep=True) for e in r.exchanges]
                 except ProviderFailure as exc:
                     source, meta = 'fallback', failure_meta(exc)
+                    old.exchanges = []
+                    old.defense = f'I request the accepted {replacement.duration_min} minutes for {replacement.title}.'[:200]
                     old.prosecution = 'The court applies your explicitly accepted replacement; live assessment is unavailable.'
             decisions[index] = accepted_decision(task, old, replacement)
             categories = {d.task_id:'health' for d in decisions if d.suggested_need and d.suggested_need.status == 'confirmed' and d.suggested_need.need.lower() == 'rest'}

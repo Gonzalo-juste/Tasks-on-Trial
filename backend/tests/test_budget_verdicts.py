@@ -50,18 +50,18 @@ def test_judge_allocation_225_is_kept_without_python_cuts():
 
 
 @pytest.mark.parametrize('explicit_budget', [True, False])
-def test_python_cut_sequence_215_uses_facts_and_priority(explicit_budget):
+def test_python_cut_sequence_uses_supporting_evidence_not_any_fact(explicit_budget):
     case = chaotic_case()
     if not explicit_budget: case.budget_min = None
     proposal = recommendations(case); before = proposal.model_dump()
     result = build_result(case, proposal, 'python-cuts', 'live', Meta())
     decisions = {d.task_id:d for d in result.decisions}
-    assert result.metrics.model_dump() == dict(original_min=335, approved_min=215,
-        minutes_recovered=120, pending_min=0, free_capacity_min=25)
+    assert result.metrics.model_dump() == dict(original_min=335, approved_min=180,
+        minutes_recovered=155, pending_min=0, free_capacity_min=60)
     assert decisions['tiktok'].verdict == 'DISMISSED' and 'not_proven' in decisions['tiktok'].reason
-    assert decisions['gym'].approved_min == 30 and decisions['study'].approved_min == 45
-    assert decisions['emails'].approved_min == 30  # Stop immediately once within budget.
-    assert 'budget_reduction' in decisions['gym'].reason
+    assert decisions['gym'].verdict == 'DISMISSED' and decisions['study'].approved_min == 90
+    assert decisions['emails'].verdict == 'DISMISSED'  # No-fact requests go before evidence-bearing work.
+    assert 'not_proven' in decisions['gym'].reason  # Travel does not prove training today.
     assert proposal.model_dump() == before
     assert_valid(case, result)
 
@@ -96,10 +96,11 @@ def test_mandatory_without_facts_is_never_dismissed():
     assert_valid(case, result)
 
 
-def test_reduction_permission_still_protects_confirmed_scope():
+def test_no_reduction_permission_is_all_or_nothing_not_dismissal_protection():
     case = chaotic_case(); case.tasks[3].allow_reduction = False
     result = build_result(case, recommendations(case), 'no-gym-reduction', 'live', Meta())
-    assert next(d for d in result.decisions if d.task_id == 'gym').approved_min == 60
+    gym = next(d for d in result.decisions if d.task_id == 'gym')
+    assert gym.verdict == 'DISMISSED' and gym.approved_min == 0
     assert_valid(case, result)
 
 

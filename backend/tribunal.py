@@ -5,6 +5,8 @@ from .schemas import (Task, Case, Decision, Persona, PlanStep, Release, Need, Re
 from .scheduler import plan, effective_budget
 from .validation import verify_result
 from .presentation import character, natural_language
+from .evaluation import burden_score
+from .courtroom import populate_exchanges
 
 
 def normalize_plan(steps: list[PlanStep], minutes: int, title: str) -> list[PlanStep]:
@@ -102,6 +104,7 @@ def decide(task: Task, r: Recommendation) -> Decision:
     elif persona.archetype is None:
         persona.archetype = default.archetype
     return Decision(task_id=task.id, persona=persona, defense=natural_language(r.defense), prosecution=natural_language(r.prosecution),
+        exchanges=[e.model_copy(deep=True) for e in r.exchanges],
         verdict=verdict, original_min=task.duration_min, approved_min=minutes,
         saved_min=task.duration_min-minutes+(task.buffer_min if dismissed else 0), effective_title=title, reason=reason,
         cut_scope=r.cut_scope if adjusted and verdict != 'APPROVED' else [],
@@ -111,15 +114,17 @@ def decide(task: Task, r: Recommendation) -> Decision:
         suggested_need=need)
 
 
-def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categories=None):
+def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categories=None, recommendations=None):
     """Keep the judge's allocation unless it exceeds the confirmed calendar budget."""
     tasks = {t.id: t for t in case.tasks}
     by_id = {d.task_id: d for d in decisions}
     categories = categories or {}
-    priorities = {value: i for i, value in enumerate(case.constitution.priorities)}
-    # Stable task-ID tie break; category order is the user's declared priority.
+    recommendations = recommendations or {}
+    scores = {t.id:burden_score(case,t,recommendations.get(t.id),categories.get(t.id)) for t in case.tasks}
+    # A completely unevidenced optional request faces dismissal before cutting
+    # work with a confirmed record. A typed deadline is itself confirmed evidence.
     ordered = sorted(case.tasks, key=lambda t: (
-        -priorities.get(categories.get(t.id, t.category), len(priorities)), t.id))
+        bool(t.facts or t.deadline), scores[t.id].total, t.id))
     budget = effective_budget(case)
     def load():
         return sum(d.approved_min + tasks[d.task_id].buffer_min
@@ -130,30 +135,38 @@ def fit_recommendations_to_budget(case: Case, decisions: list[Decision], categor
             if load() <= budget:
                 return
             d = by_id[task.id]
-            if d.verdict == 'DISMISSED':
+            if d.verdict == 'DISMISSED' or task.mandatory:
                 continue
-            if not task.facts and not task.mandatory:
+            score = scores[task.id]
+            driver = f'Lowest eligible score {score.total:g}; priority +{score.priority}, cost {score.cost:g}'
+            if not task.facts and task.deadline is None:
+                driver = f'No confirmed facts or deadline; {driver[0].lower() + driver[1:]}'
+            if score.adjustment:
+                driver += f', judge adjustment {score.adjustment:+d}: {score.adjustment_reason}'
+            if score.supporting and task.allow_reduction and d.approved_min > task.minimum_min:
+                d.verdict, d.approved_min = 'REDUCED', task.minimum_min
+                d.saved_min = task.duration_min - task.minimum_min
+                d.reason = f'budget_reduction: {driver}. Supporting evidence: {score.supporting[0][:150]}. Reduced to the confirmed minimum.'[:500]
+                d.cut_scope = ['Work beyond the confirmed minimum is deferred.']
+                d.first_move, d.action_plan, d.done_when = consistent_order(
+                    [], d.approved_min, d.effective_title, None, None)
+                d.release = None
+                d.schedule_status, d.pending_reason = 'PENDING', None
+                changed = True
+            else:
                 # Do not create a missing prerequisite for a retained task.
                 if any(task.id in other.depends_on and by_id[other.id].verdict != 'DISMISSED'
                        for other in case.tasks):
                     continue
                 d.verdict, d.approved_min = 'DISMISSED', 0
                 d.saved_min = task.duration_min + task.buffer_min
-                d.reason = 'not_proven: No confirmed facts support allocating time to this task within the budget.'
+                d.reason = ((f'not_proven: No supporting evidence this is needed today. {driver}.')
+                            if not score.supporting else
+                            f'budget_dismissal: {driver}. Cannot shorten further within the confirmed limits; deferred as a whole.')[:500]
                 d.cut_scope = ['Deferred today because the confirmed budget is exhausted.']
                 d.first_move, d.action_plan, d.done_when = None, [], None
-                d.release = Release(action='defer', note='No confirmed facts were supplied. Add evidence or request a pardon.')
+                d.release = Release(action='defer', note='Deferred to fit the budget. Add supporting evidence or request a pardon.')
                 d.schedule_status, d.pending_reason = 'NOT_APPLICABLE', None
-                changed = True
-            elif task.facts and task.allow_reduction and d.approved_min > task.minimum_min:
-                d.verdict, d.approved_min = 'REDUCED', task.minimum_min
-                d.saved_min = task.duration_min - task.minimum_min
-                d.reason = 'budget_reduction: Reduced to your confirmed minimum to fit the available budget.'
-                d.cut_scope = ['Work beyond the confirmed minimum is deferred.']
-                d.first_move, d.action_plan, d.done_when = consistent_order(
-                    [], d.approved_min, d.effective_title, None, None)
-                d.release = None
-                d.schedule_status, d.pending_reason = 'PENDING', None
                 changed = True
         if not changed:
             return  # Protected work remains pending; placement never exceeds budget.
@@ -172,7 +185,9 @@ def build_result(case: Case, proposal: RunProposal | None, request_id: str, sour
                 decision.persona = character(task)
             names.add(decision.persona.name.casefold())
         if proposal is not None:
-            fit_recommendations_to_budget(case, decisions, categories)
+            fit_recommendations_to_budget(case, decisions, categories, by_id)
+    if source != 'replay' or any(d.exchanges for d in decisions):
+        populate_exchanges(case, decisions)
     schedule, metrics, conflicts = plan(case, decisions, categories)
     tasks = {t.id: t for t in case.tasks}
     mandatory_load = sum(d.approved_min + tasks[d.task_id].buffer_min
@@ -209,8 +224,13 @@ def accepted_decision(task: Task, old: Decision, replacement: Replacement) -> De
     steps = replacement.action_plan or [PlanStep(step=s, minutes=1) for s in (replacement.steps or [])]
     first_move, action_plan, done_when = consistent_order(
         steps, minutes, replacement.title, replacement.first_move, replacement.done_when)
+    exchanges = [e.model_copy(deep=True) for e in old.exchanges]
+    if exchanges:
+        exchanges[0].text = natural_language(old.defense)[:200]
+        exchanges[1].text = natural_language(old.prosecution)[:200]
     return old.model_copy(update={
         'defense':natural_language(old.defense), 'prosecution':natural_language(old.prosecution),
+        'exchanges':exchanges,
         'verdict':'REDUCED' if minutes < task.duration_min else 'APPROVED',
         'approved_min':minutes, 'saved_min':task.duration_min-minutes,
         'effective_title':replacement.title,

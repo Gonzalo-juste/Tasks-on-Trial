@@ -7,6 +7,10 @@ See [CONTRACT_V4.md](CONTRACT_V4.md) for `/init`, detailed `/revise`, buffers,
 archetypes, pardons and rules. The original replay fixtures remain v3. The 375-minute
 v4 demo is tested locally; a new shared replay fixture set is still needed from Carlos.
 
+See [EVALUATION_ROUNDS.md](EVALUATION_ROUNDS.md) for the latest burden-score budget
+policy and 1–3 rounds of exchanges generated together in one /run call. It
+supersedes the category-only cut order described in earlier checkpoints.
+
 ## Start locally
 
 From the repository root, using Python 3.11 or newer:
@@ -206,11 +210,13 @@ provided it must exactly match that task's facts; invented or borrowed citations
 still cause the proposed scope change to be rejected. Mandatory protection remains.
 
 Python keeps valid judge verdicts unless their total work plus retained buffers
-exceeds the effective budget. It then visits lowest-priority categories first:
-non-mandatory tasks without facts are dismissed with a not_proven explanation;
-tasks with facts and reduction permission go down to their confirmed minimum.
-It stops as soon as the allocation fits and protects retained dependencies.
-See BUDGET_UPDATE.md for conflict handling and the two chaotic-day outcomes.
+exceeds the effective budget. It first visits requests without facts or a deadline,
+then work with a confirmed record, ordered by lowest burden score within each group:
+non-mandatory tasks without supporting evidence for today are dismissed with a
+not_proven explanation; supported reducible tasks go down to their confirmed
+minimum. Non-reducible optional tasks can be dismissed as a whole. Mandatory work
+is not cut. It stops when the allocation fits and protects retained dependencies.
+See EVALUATION_ROUNDS.md for the current order; earlier illustrative totals are not targets.
 
 ## Six-task local evaluation
 

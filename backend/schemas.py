@@ -1,8 +1,9 @@
 """Public contract matches frontend/fixtures; provider proposals are separate."""
 from datetime import datetime
+from functools import lru_cache
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, StrictInt, field_validator
+from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, StrictInt, field_validator, create_model
 from .errors import ApiError
 
 Category = Literal['health', 'learning', 'work', 'money', 'family', 'leisure', 'other']
@@ -44,6 +45,7 @@ class Rules(Model):
     mode: Literal['quick', 'standard', 'grand', 'immediate'] = 'quick'
     severity: Annotated[float, Field(ge=0, le=1)] = 0.5
     drama: Annotated[float, Field(ge=0, le=1)] = 0.5
+    rounds: Annotated[StrictInt, Field(ge=1, le=3)] | None = Field(default=None, exclude_if=lambda v: v is None)
 
 class Relation(Model):
     a: str
@@ -90,11 +92,17 @@ class Release(Model):
     action: Literal['drop', 'defer', 'delegate'] = 'drop'
     note: Text
 
+class Exchange(Model):
+    round: Annotated[StrictInt, Field(ge=1, le=3)]
+    speaker: Literal['defense', 'prosecution']
+    text: Annotated[str, Field(min_length=1, max_length=200)]
+
 class Decision(Model):
     task_id: str
     persona: Persona
     defense: Annotated[str, Field(max_length=240)]
     prosecution: Annotated[str, Field(max_length=240)]
+    exchanges: list[Exchange] = Field(default_factory=list, max_length=6, exclude_if=lambda v: not v)
     verdict: Verdict
     original_min: PositiveMinutes
     approved_min: Annotated[StrictInt, Field(ge=0, le=1440)]
@@ -207,6 +215,9 @@ class Recommendation(Model):
     persona: Persona = Persona()
     defense: Annotated[str, Field(max_length=240)]
     prosecution: Annotated[str, Field(max_length=240)]
+    exchanges: Annotated[list[Exchange], Field(max_length=6)] = []
+    score_adjustment: Annotated[StrictInt, Field(ge=-1, le=1)] = 0
+    score_reason: Annotated[str, Field(min_length=1, max_length=200)] | None = None
     recommendation: Verdict
     approved_min: Annotated[StrictInt, Field(ge=0, le=1440)]
     effective_title: Text
@@ -221,6 +232,16 @@ class Recommendation(Model):
 class RunProposal(Model):
     decisions: Annotated[list[Recommendation], Field(min_length=1, max_length=6)]
     judge_summary: Annotated[str, Field(max_length=200)] = ''
+
+
+@lru_cache(maxsize=3)
+def provider_run_schema(rounds: int):
+    """Make the requested speeches mandatory in the actual structured-output schema."""
+    if rounds not in (1, 2, 3): raise ValueError('Unsupported round count.')
+    decision = create_model(f'ProviderDecision{rounds}Rounds', __base__=Recommendation,
+        exchanges=(list[Exchange], Field(..., min_length=2*rounds, max_length=2*rounds)))
+    return create_model(f'ProviderRun{rounds}Rounds', __base__=RunProposal,
+        decisions=(list[decision], Field(..., min_length=1, max_length=6)))
 
 class InterrogationProposal(Model):
     answer: Annotated[str, Field(max_length=240)]

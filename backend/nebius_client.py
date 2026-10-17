@@ -8,7 +8,9 @@ import httpx
 from pydantic import BaseModel, ValidationError
 from .config import Settings
 from .prompts import RUN_SYSTEM, INTERROGATE_SYSTEM, INIT_SYSTEM, REVISE_SYSTEM
-from .schemas import Case, RunProposal, InterrogationProposal, Meta, InitDraft, RevisedOrder
+from .schemas import Case, RunProposal, InterrogationProposal, Meta, InitDraft, RevisedOrder, provider_run_schema
+from .courtroom import round_count, validate_exchanges, validate_personal_history
+from .evaluation import burden_score
 
 logger = logging.getLogger('uvicorn.error.provider')
 T = TypeVar('T', bound=BaseModel)
@@ -81,6 +83,15 @@ class NebiusClient:
                             return parsed, meta
                         except (httpx.HTTPError, ValidationError, ValueError, KeyError, IndexError, TypeError) as exc:
                             reason = type(exc).__name__  # never include response body or task contents
+                            if isinstance(exc,ValueError) and not isinstance(exc,ValidationError):
+                                reason = {
+                                    'Exchange count does not match requested rounds.':'exchange_count',
+                                    'Exchanges must alternate defense and prosecution each round.':'exchange_order',
+                                    'Repeated exchange text.':'exchange_repetition',
+                                    'Compatibility speeches must equal round one.':'round_one_mismatch',
+                                    'Score adjustment requires a short reason.':'score_reason_missing',
+                                    'Unconfirmed personal history in exchange.':'ungrounded_personal_history',
+                                }.get(str(exc),reason)
                             fields = [('.'.join(map(str,e['loc'])), e['type']) for e in exc.errors(include_input=False)] if isinstance(exc,ValidationError) else []
                             logger.warning('provider_retry operation=%s model=%s attempt=%s reason=%s fields=%s',schema.__name__,s.model,calls,reason,fields)
         except TimeoutError:
@@ -95,11 +106,23 @@ class NebiusClient:
             ids = [d.task_id for d in value.decisions]
             if len(ids) != len(set(ids)) or set(ids) != expected:
                 raise ValueError('Unexpected task IDs')
-        payload = {'case':case.model_dump(mode='json'), 'target_ids':sorted(expected)}
+            for decision in value.decisions:
+                validate_exchanges(decision.exchanges,round_count(case),decision.defense,decision.prosecution)
+                task = next(t for t in case.tasks if t.id == decision.task_id)
+                validate_personal_history(decision.exchanges,task)
+                if decision.score_adjustment and not decision.score_reason:
+                    raise ValueError('Score adjustment requires a short reason.')
+        case_payload = case.model_dump(mode='json')
+        if case.rules and case.rules.mode == 'grand':
+            case_payload['rules']['drama'] = 1
+        payload = {'case':case_payload, 'target_ids':sorted(expected),
+                   'rounds':round_count(case),
+                   'burden_of_proof':{t.id:burden_score(case,t).payload() for t in case.tasks if not t.mandatory}}
         if target_id:
             payload.update(target_id=target_id, new_fact=new_fact,
                            accepted_replacement=replacement.model_dump(mode='json') if replacement else None)
-        return await self.generate(RUN_SYSTEM, payload, RunProposal, validate, temperature=0)
+        value, meta = await self.generate(RUN_SYSTEM, payload, provider_run_schema(round_count(case)), validate, temperature=0)
+        return RunProposal.model_validate(value.model_dump()), meta
 
     async def init(self, request):
         from .intake import prepare
